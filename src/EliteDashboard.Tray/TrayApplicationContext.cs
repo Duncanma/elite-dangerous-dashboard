@@ -26,7 +26,7 @@ public sealed class TrayApplicationContext : ApplicationContext
 
         _trayIcon = new NotifyIcon
         {
-            Icon = SystemIcons.Application,
+            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application,
             ContextMenuStrip = menu,
             Visible = true,
             Text = "Elite Dangerous Dashboard",
