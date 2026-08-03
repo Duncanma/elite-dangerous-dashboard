@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\EliteDashboard.Domain\EliteDashboard.Domain.csproj" />
+    <ProjectReference Include="..\EliteDashboard.Journal\EliteDashboard.Journal.csproj" />
+    <ProjectReference Include="..\EliteDashboard.Data\EliteDashboard.Data.csproj" />
+    <ProjectReference Include="..\EliteDashboard.Trading\EliteDashboard.Trading.csproj" />
+    <ProjectReference Include="..\EliteDashboard.External\EliteDashboard.External.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,36 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+
+# Node / frontend
+node_modules/
+web/dist/
+web/dist-ssr/
+*.local
+
+# Logs
+*.log
+logs/
+
+# SQLite data
+*.db
+*.db-shm
+*.db-wal
+
+# Scratch / fixtures used for local testing (not committed)
+fixtures/scratch/
+
+# Deployment output and the frontend build copied into wwwroot at publish time
+/publish/
+src/EliteDashboard.Host/wwwroot/*
+!src/EliteDashboard.Host/wwwroot/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.suo
