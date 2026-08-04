@@ -3,7 +3,6 @@ namespace EliteDashboard.Journal.Events;
 public sealed record FuelInfo
 {
     public double FuelMain { get; init; }
-    public double FuelReservoir { get; init; }
 }
 
 /// <summary>

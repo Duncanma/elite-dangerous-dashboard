@@ -9,7 +9,6 @@ public sealed record ShipStatusSnapshot
     public long Flags { get; init; }
     public double CargoTons { get; init; }
     public double FuelMain { get; init; }
-    public double FuelReservoir { get; init; }
     public string? LegalState { get; init; }
 
     public static readonly ShipStatusSnapshot Empty = new();

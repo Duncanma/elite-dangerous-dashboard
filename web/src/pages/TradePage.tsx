@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTrade } from "../useTrade";
+import { useTradeCriteria } from "../useTradeCriteria";
 import { formatCredits } from "../shipLabels";
-import { sizeClassLabel, type TradeSearchCriteria } from "../api";
+import { sizeClassLabel } from "../api";
 import { stationIconUrl } from "../stationArt";
 import { MaskIcon } from "../MaskIcon";
 
@@ -10,36 +11,10 @@ function StationIcon({ stationType }: { stationType: string | null }) {
   return url ? <MaskIcon src={url} className="inline-icon" label={stationType ?? undefined} /> : null;
 }
 
-function criteriaFromDefaults(defaults: NonNullable<ReturnType<typeof useTrade>["defaults"]>): TradeSearchCriteria {
-  return {
-    originStationId: null,
-    originMarketId: null,
-    originSystemName: defaults.originSystemName,
-    cargoCapacity: defaults.cargoCapacity || 1,
-    credits: defaults.credits,
-    maxHops: defaults.maxHops,
-    shipJumpRangeLy: defaults.shipJumpRangeLy,
-    maxJumpsFromOrigin: defaults.maxJumpsFromOrigin,
-    maxJumpsBetweenStations: defaults.maxJumpsBetweenStations,
-    requiredShipSizeClass: defaults.requiredShipSizeClass,
-    includeUnknownPadSize: defaults.includeUnknownPadSize,
-    excludePlanetary: defaults.excludePlanetary,
-    excludeFleetCarriers: defaults.excludeFleetCarriers,
-  };
-}
-
 export default function TradePage() {
   const { status, activePlan, candidates, defaults, coverage, searching, error, search, activate, abandon } = useTrade();
-  const [criteria, setCriteria] = useState<TradeSearchCriteria | null>(null);
+  const { criteria, patch, resetToDefaults } = useTradeCriteria(defaults);
   const [showSettings, setShowSettings] = useState(false);
-
-  useEffect(() => {
-    if (defaults && !criteria) {
-      setCriteria(criteriaFromDefaults(defaults));
-    }
-  }, [defaults, criteria]);
-
-  const patch = (p: Partial<TradeSearchCriteria>) => setCriteria((c) => (c ? { ...c, ...p } : c));
 
   if (!criteria) {
     return (
@@ -203,7 +178,7 @@ export default function TradePage() {
             </p>
 
             {defaults ? (
-              <button className="link-button" onClick={() => setCriteria(criteriaFromDefaults(defaults))}>
+              <button className="link-button" onClick={resetToDefaults}>
                 Reset to detected ship/location defaults
               </button>
             ) : null}

@@ -90,7 +90,7 @@ export default function DashboardPage() {
         <div className="card-row">
           <span className="label">Fuel</span>
           <span className="value">
-            {state.shipStatus.fuelMain.toFixed(1)}T main, {state.shipStatus.fuelReservoir.toFixed(2)}T reserve
+            {state.shipStatus.fuelMain.toFixed(1)} T
           </span>
         </div>
         <div className="card-row">

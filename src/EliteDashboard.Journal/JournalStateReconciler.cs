@@ -1,3 +1,4 @@
+using System.Text.Json;
 using EliteDashboard.Data;
 using EliteDashboard.Data.Entities;
 using EliteDashboard.Domain;
@@ -46,7 +47,6 @@ public sealed class JournalStateReconciler
                 Flags = snapshot.Flags,
                 CargoTons = snapshot.Cargo,
                 FuelMain = snapshot.Fuel?.FuelMain ?? s.ShipStatus.FuelMain,
-                FuelReservoir = snapshot.Fuel?.FuelReservoir ?? s.ShipStatus.FuelReservoir,
                 LegalState = snapshot.LegalState,
             },
         });
@@ -236,6 +236,7 @@ public sealed class JournalStateReconciler
                     LastUpdatedUtc = e.Timestamp,
                 });
                 _ = PersistFleetSyncAsync(_store.Current.Fleet);
+                _ = PersistShipLoadoutAsync(e);
 
                 // Unlike LoadGame's ShipLocalised, Loadout never carries a
                 // display name for the ship - without this, swapping ships
@@ -815,6 +816,69 @@ public sealed class JournalStateReconciler
             // including dropping ships that were sold since the last sync.
             db.Ships.RemoveRange(db.Ships);
             db.Ships.AddRange(snapshot);
+
+            // Loadout snapshots follow fleet membership: a sold ship's
+            // snapshot is useless and must not linger. Same idempotency as
+            // the fleet resync itself - replaying the same events yields the
+            // same end state either way.
+            var fleetIds = fleet.Select(f => f.ShipId).ToList();
+            await db.ShipLoadouts.Where(l => !fleetIds.Contains(l.ShipId)).ExecuteDeleteAsync(ct);
+
+            await db.SaveChangesAsync(ct);
+        });
+    }
+
+    /// <summary>
+    /// Upserts the durable per-ship loadout snapshot from a Loadout event.
+    /// Newest event timestamp wins: the high-water backfill plus live tail
+    /// can surface older journal history after a newer snapshot is already
+    /// stored, and replaying the same event must be a no-op - both are
+    /// handled by the SeenAtUtc guard, keeping this safe under replay.
+    /// </summary>
+    private async Task PersistShipLoadoutAsync(LoadoutEvent e)
+    {
+        var modulesJson = JsonSerializer.Serialize((e.Modules ?? []).Select(ToModuleSummary).ToList());
+        var seenAtUtc = e.Timestamp.UtcDateTime;
+
+        await _writeQueue.EnqueueAsync(async (db, ct) =>
+        {
+            var existing = await db.ShipLoadouts.SingleOrDefaultAsync(l => l.ShipId == e.ShipID, ct);
+            if (existing is not null && existing.SeenAtUtc > seenAtUtc)
+            {
+                return;
+            }
+
+            if (existing is null)
+            {
+                db.ShipLoadouts.Add(new ShipLoadout
+                {
+                    ShipId = e.ShipID,
+                    ShipType = e.Ship,
+                    SeenAtUtc = seenAtUtc,
+                    CargoCapacity = e.CargoCapacity,
+                    MaxJumpRange = e.MaxJumpRange,
+                    FuelCapacityMain = e.FuelCapacity?.Main ?? 0,
+                    UnladenMass = e.UnladenMass,
+                    Rebuy = e.Rebuy,
+                    HullValue = e.HullValue,
+                    ModulesValue = e.ModulesValue,
+                    ModulesJson = modulesJson,
+                });
+            }
+            else
+            {
+                existing.ShipType = e.Ship;
+                existing.SeenAtUtc = seenAtUtc;
+                existing.CargoCapacity = e.CargoCapacity;
+                existing.MaxJumpRange = e.MaxJumpRange;
+                existing.FuelCapacityMain = e.FuelCapacity?.Main ?? 0;
+                existing.UnladenMass = e.UnladenMass;
+                existing.Rebuy = e.Rebuy;
+                existing.HullValue = e.HullValue;
+                existing.ModulesValue = e.ModulesValue;
+                existing.ModulesJson = modulesJson;
+            }
+
             await db.SaveChangesAsync(ct);
         });
     }

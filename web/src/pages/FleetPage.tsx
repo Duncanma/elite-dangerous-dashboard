@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useDashboardState } from "../useDashboardState";
 import { useWishlist } from "../useWishlist";
 import { useShipSpecs, lookupShipSpec } from "../useShipSpecs";
-import { useModuleSpecs, moduleDisplayName } from "../useModuleSpecs";
+import { useModuleSpecs, moduleDisplayParts, moduleSlotLabel } from "../useModuleSpecs";
+import { useShipLoadout } from "../useShipLoadout";
 import { shipImageUrl, sizeClassLabel } from "../api";
 import { formatCredits, shipLocationText } from "../shipLabels";
 
@@ -11,13 +12,22 @@ export default function FleetPage() {
   const { items: wishlist, add, markPurchased, remove } = useWishlist();
   const specs = useShipSpecs();
   const moduleSpecs = useModuleSpecs();
+  const [selectedShipId, setSelectedShipId] = useState<number | null>(null);
   const [newShipType, setNewShipType] = useState("");
   const [newDisplayName, setNewDisplayName] = useState("");
   const [newCost, setNewCost] = useState("");
 
+  // No explicit selection yet -> show the ship being flown. Computed before
+  // the loading guard so the hook below runs unconditionally.
+  const currentShipId = state?.fleet.find((s) => s.location === "Current")?.shipId;
+  const selectedId = selectedShipId ?? currentShipId ?? state?.fleet[0]?.shipId ?? null;
+  const { loadout, notFound } = useShipLoadout(selectedId);
+
   if (!state) {
     return <p className="loading">Waiting for fleet data…</p>;
   }
+
+  const selectedShip = state.fleet.find((s) => s.shipId === selectedId) ?? null;
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,16 +46,23 @@ export default function FleetPage() {
           {state.fleet.map((ship) => {
             const spec = lookupShipSpec(specs, ship.shipType);
             return (
-              <div className="ship-card" key={ship.shipId}>
-                <img
-                  className="ship-badge"
-                  src={shipImageUrl(ship.shipType ?? "unknown", ship.shipTypeDisplay ?? ship.shipType, spec?.sizeClass, ship.name)}
-                  alt={ship.shipTypeDisplay ?? ship.shipType ?? "Unknown ship"}
-                />
+              <button
+                type="button"
+                className={`ship-card${ship.shipId === selectedId ? " selected" : ""}`}
+                key={ship.shipId}
+                onClick={() => setSelectedShipId(ship.shipId)}
+              >
+                <div className="ship-card-side">
+                  <img
+                    className="ship-badge"
+                    src={shipImageUrl(ship.shipType ?? "unknown", ship.shipTypeDisplay ?? ship.shipType, spec?.sizeClass, ship.name)}
+                    alt={ship.shipTypeDisplay ?? ship.shipType ?? "Unknown ship"}
+                  />
+                  {ship.location === "Current" ? <span className="chip legal-clean ship-active-chip">active</span> : null}
+                </div>
                 <div className="ship-card-body">
                   <div className="ship-card-name">
                     {ship.name || ship.shipTypeDisplay || ship.shipType}
-                    {ship.location === "Current" ? <span className="chip legal-clean ship-active-chip">active</span> : null}
                   </div>
                   <div className="ship-card-type">{ship.shipTypeDisplay ?? ship.shipType}</div>
                   <div className="ship-card-location">
@@ -58,31 +75,76 @@ export default function FleetPage() {
                     </div>
                   ) : null}
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
       </section>
 
       <section className="card wide">
-        <h2>Current ship loadout</h2>
-        {state.currentShipModules.length === 0 ? (
-          <p className="empty-hint">No module data yet - it's populated from the game's Loadout event.</p>
-        ) : (
-          state.currentShipModules.map((m, i) => (
-            <div className="card-row" key={`${m.slot}-${i}`}>
-              <span className="label">
-                {m.slot}
-                {!m.on ? <span className="chip legal-caution module-off-chip">off</span> : null}
-              </span>
-              <span className="value">
-                {moduleDisplayName(moduleSpecs, m.item)}
-                {m.engineeringBlueprint ? (
-                  <span className="txn-time"> · {m.engineeringBlueprint} G{m.engineeringLevel}</span>
-                ) : null}
-              </span>
+        <h2>
+          Ship loadout
+          {selectedShip ? ` — ${selectedShip.name || selectedShip.shipTypeDisplay || selectedShip.shipType}` : ""}
+        </h2>
+        {!selectedShip ? (
+          <p className="empty-hint">No ships in your fleet yet.</p>
+        ) : loadout ? (
+          <>
+            <p className="loadout-seen">Last seen {new Date(loadout.seenAtUtc).toLocaleString()}</p>
+            <div className="loadout-stats">
+              <div className="loadout-stat">
+                <span className="loadout-stat-label">Cargo capacity</span>
+                <span className="loadout-stat-value">{loadout.cargoCapacity} T</span>
+              </div>
+              <div className="loadout-stat">
+                <span className="loadout-stat-label">Max jump range</span>
+                <span className="loadout-stat-value">{loadout.maxJumpRange.toFixed(2)} LY</span>
+              </div>
+              <div className="loadout-stat">
+                <span className="loadout-stat-label">Fuel tank</span>
+                <span className="loadout-stat-value">{loadout.fuelCapacityMain} T</span>
+              </div>
+              <div className="loadout-stat">
+                <span className="loadout-stat-label">Hull value</span>
+                <span className="loadout-stat-value">{formatCredits(loadout.hullValue)}</span>
+              </div>
+              <div className="loadout-stat">
+                <span className="loadout-stat-label">Modules value</span>
+                <span className="loadout-stat-value">{formatCredits(loadout.modulesValue)}</span>
+              </div>
+              <div className="loadout-stat">
+                <span className="loadout-stat-label">Rebuy</span>
+                <span className="loadout-stat-value">{formatCredits(loadout.rebuy)}</span>
+              </div>
             </div>
-          ))
+            {loadout.modules.map((m, i) => {
+              const parts = moduleDisplayParts(moduleSpecs, m.item);
+              return (
+                <div className="card-row" key={`${m.slot}-${i}`}>
+                  <span className="label">
+                    {moduleSlotLabel(m.slot)}
+                    {!m.on ? <span className="chip legal-caution module-off-chip">off</span> : null}
+                  </span>
+                  <span className="value">
+                    {parts.name}
+                    {parts.mount ? <span className="txn-time"> ({parts.mount})</span> : null}
+                    {parts.classRating ? <span className="chip module-class-chip">{parts.classRating}</span> : null}
+                    {m.engineeringBlueprint ? (
+                      <span className="chip module-eng-chip">
+                        {m.engineeringBlueprint} G{m.engineeringLevel}
+                      </span>
+                    ) : null}
+                  </span>
+                </div>
+              );
+            })}
+          </>
+        ) : notFound ? (
+          <p className="empty-hint">
+            No loadout recorded for this ship yet - it's captured automatically when you board it in game.
+          </p>
+        ) : (
+          <p className="empty-hint">Loading loadout…</p>
         )}
       </section>
 

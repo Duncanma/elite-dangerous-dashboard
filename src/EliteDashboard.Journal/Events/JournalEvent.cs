@@ -94,6 +94,8 @@ public sealed record LoadoutEvent : JournalEvent
     public string? ShipIdent { get; init; }
     public double CargoCapacity { get; init; }
     public double MaxJumpRange { get; init; }
+    public FuelCapacityInfo? FuelCapacity { get; init; }
+    public double UnladenMass { get; init; }
     public long Rebuy { get; init; }
     public long HullValue { get; init; }
     public long ModulesValue { get; init; }

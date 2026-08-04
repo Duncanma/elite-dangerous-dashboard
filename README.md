@@ -4,6 +4,8 @@ A personal, real-time dashboard for Elite Dangerous. It runs on your gaming PC, 
 
 Views: **Dashboard** (commander, current ship portrait, rank progress, location, fleet summary, active trade route, economic snapshot with a spend breakdown), **Economics** (funds-over-time chart with 30-day/90-day/all-time views, categorized transaction feed with an income/expense summary), **Fleet** (owned ships with real coriolis-derived specs and human-readable module loadout names, wishlist, upgrade plans), **Trade** (route planner backed by a live EDDN price feed, with progress tracking, and a settings panel to constrain searches by jump radius, pad size, hop distance, and planet/fleet-carrier exclusion - all defaulted from your current ship and location), **My Systems** (colonisation sites you're building or contributing to, with a shipping-plan generator for outstanding materials), **Powerplay** (personal standing and merits history with the same time-range views as Economics), and **Settings** (Inara sync).
 
+For a walkthrough of each tab (with screenshots), see the [User guide](docs/USER-GUIDE.md).
+
 ## How it works, in short
 
 One ASP.NET Core process tails your Journal folder, reconciles events into a SQLite database and an in-memory state store, and pushes updates to connected browsers over SignalR. A React SPA renders that state and is served from the same process on the same port, so there's nothing else to run in production. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design.
@@ -16,6 +18,14 @@ The first time the app runs against a given database, it also does a one-time im
 - [.NET 9 SDK](https://dotnet.microsoft.com/download)
 - [Node.js 22+](https://nodejs.org/) (for building the frontend)
 - Elite Dangerous installed and having been launched at least once (so `%USERPROFILE%\Saved Games\Frontier Developments\Elite Dangerous` exists)
+
+## Who this is for (read this)
+
+This is a **personal, single-commander** app for your **private home network**. It is not a multi-user service and it is not safe on the public internet.
+
+- **One Elite Dangerous account.** The dashboard assumes a single commander on the machine: one journal folder, one SQLite database, one live state. If two accounts (or two people) use the same install, their credits, fleet, location, wishlist, trade plans, and history will silently merge and overwrite each other. Run a separate Windows user profile — and therefore a separate `%LOCALAPPDATA%\EliteDashboard\` — if you need a second commander.
+- **Private LAN only.** The Host listens on all interfaces (`0.0.0.0:5080`) with **no authentication**, so any device that can reach that port can read your live commander state (name, location, credits, fleet, …) and change settings (including overwriting your Inara API key). That is intentional for your own phone/tablet on trusted Wi‑Fi. It is **not** intentional for the internet.
+- **Do not port-forward, expose, or proxy port 5080 to the WAN.** Do not put it behind a public URL, a cloud tunnel, or an “open to the internet” firewall rule. The install script opens the Windows Firewall for the **Private** profile only — leave it that way. If you need access away from home, use a VPN into your LAN (Tailscale, WireGuard, etc.), not a forwarded port.
 
 ## Running in development
 
@@ -82,6 +92,8 @@ The Fleet page and Dashboard ship portrait can show real images instead of the g
 
 Use the ship type name exactly as shown on the Fleet page (e.g. `Krait Mk II.webp`, `Panther Clipper Mk II.png`) or your ship's given name (e.g. `Hunter.webp`) for a specific hull - matching ignores spacing, punctuation, and case, so `krait-mk-ii.webp` works just as well. `.webp`, `.png`, `.jpg`, and `.jpeg` are all supported. A `by-ship` match wins over `by-type` if both exist for the same ship; anything with neither falls back to the generated placeholder. Files are picked up immediately - no restart needed.
 
+For resilience, keep a second copy of your art in the repo at `ship-art\` (same `by-type`/`by-ship` layout) - that folder is git-ignored, so the images still never get committed. `deploy\publish.ps1` restores it into the live folder at the end of every publish (additively - it never deletes files that exist only in the live folder), so if `%LOCALAPPDATA%\EliteDashboard` is ever wiped, your art comes back on the next deploy.
+
 ## Inara sync
 
 If you have an [Inara](https://inara.cz/) account, open the **Settings** tab in the dashboard and paste in your personal API key (Inara account → Referral & API section). Once configured, the app pushes your credits, combat/trade/exploration/CQC ranks, Powerplay standing, and lifetime statistics to Inara every 10 minutes. The key is stored only in your local `dashboard.db`, never anywhere else. Remove it from the same Settings page at any time to stop syncing.
@@ -99,7 +111,7 @@ If you have an [Inara](https://inara.cz/) account, open the **Settings** tab in 
 
 ## Engineering documentation
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for project structure, data flow, the historical backfill and replay-safety rules, the colonisation shipping planner, how to add a new journal event, migrations, and known gaps.
+See [docs/USER-GUIDE.md](docs/USER-GUIDE.md) for how each tab works (end-user). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for project structure, data flow, the historical backfill and replay-safety rules, the colonisation shipping planner, how to add a new journal event, migrations, and known gaps.
 
 ## Attribution
 

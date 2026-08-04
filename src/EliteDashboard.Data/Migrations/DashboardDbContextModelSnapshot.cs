@@ -387,6 +387,54 @@ namespace EliteDashboard.Data.Migrations
                     b.ToTable("Ships");
                 });
 
+            modelBuilder.Entity("EliteDashboard.Data.Entities.ShipLoadout", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("CargoCapacity")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("FuelCapacityMain")
+                        .HasColumnType("REAL");
+
+                    b.Property<long>("HullValue")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("MaxJumpRange")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("ModulesJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ModulesValue")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Rebuy")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("SeenAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ShipId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ShipType")
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("UnladenMass")
+                        .HasColumnType("REAL");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ShipId")
+                        .IsUnique();
+
+                    b.ToTable("ShipLoadouts");
+                });
+
             modelBuilder.Entity("EliteDashboard.Data.Entities.ShipStaticSpec", b =>
                 {
                     b.Property<long>("Id")

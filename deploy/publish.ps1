@@ -48,6 +48,16 @@ Write-Host "==> Publishing Tray" -ForegroundColor Cyan
 dotnet publish $trayProject -c Release -o $OutputDir --self-contained false
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish (Tray) failed" }
 
+# Ship art lives in %LOCALAPPDATA% and survives republishes, but NOT an
+# app-data wipe - the repo holds a git-ignored backup copy under ship-art\
+# and this step restores it additively (never deletes live-only files).
+$artBackup = Join-Path $repoRoot "ship-art"
+$artLive = Join-Path $env:LOCALAPPDATA "EliteDashboard\ship-art"
+if (Test-Path $artBackup) {
+    Write-Host "==> Restoring ship art backup to $artLive" -ForegroundColor Cyan
+    Get-ChildItem $artBackup -Directory | Copy-Item -Destination $artLive -Recurse -Force
+}
+
 Write-Host ""
 Write-Host "Published to: $OutputDir" -ForegroundColor Green
 Write-Host "Run EliteDashboard.Tray.exe from that folder to start the dashboard." -ForegroundColor Green

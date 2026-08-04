@@ -30,6 +30,7 @@ public sealed class DashboardDbContext : DbContext
     public DbSet<ModuleStaticSpec> ModuleStaticSpecs => Set<ModuleStaticSpec>();
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
     public DbSet<Ship> Ships => Set<Ship>();
+    public DbSet<ShipLoadout> ShipLoadouts => Set<ShipLoadout>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -81,6 +82,11 @@ public sealed class DashboardDbContext : DbContext
         });
 
         modelBuilder.Entity<Ship>(entity =>
+        {
+            entity.HasIndex(e => e.ShipId).IsUnique();
+        });
+
+        modelBuilder.Entity<ShipLoadout>(entity =>
         {
             entity.HasIndex(e => e.ShipId).IsUnique();
         });

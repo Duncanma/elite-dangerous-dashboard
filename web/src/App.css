@@ -249,6 +249,49 @@ a {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ship-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.loadout-seen {
+  color: var(--text);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.loadout-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 16px;
+  margin: 10px 0 14px;
+}
+
+.loadout-stat-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.loadout-stat-value {
+  display: block;
+  color: var(--text-h);
+  font-weight: 500;
+}
+
+.ship-card-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .ship-badge {
@@ -301,6 +344,22 @@ a {
   font-size: 11px;
   padding: 1px 8px;
   margin-left: 8px;
+}
+
+.module-class-chip {
+  font-size: 11px;
+  padding: 1px 8px;
+  margin-left: 8px;
+  color: var(--text-h);
+  background: var(--border);
+}
+
+.module-eng-chip {
+  font-size: 11px;
+  padding: 1px 8px;
+  margin-left: 8px;
+  color: #a78bfa;
+  background: #7c3aed25;
 }
 
 .wishlist-form {

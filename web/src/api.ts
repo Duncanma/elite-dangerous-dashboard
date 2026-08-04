@@ -33,7 +33,6 @@ export interface ShipStatusSnapshot {
   flags: number;
   cargoTons: number;
   fuelMain: number;
-  fuelReservoir: number;
   legalState: string | null;
 }
 
@@ -58,6 +57,21 @@ export interface ShipModuleSummary {
   engineeringBlueprint: string | null;
   engineeringLevel: number;
   experimentalEffect: string | null;
+}
+
+/** The last Loadout snapshot persisted for a ship (GET /api/fleet/{shipId}/loadout). */
+export interface ShipLoadoutDetail {
+  shipId: number;
+  shipType: string | null;
+  seenAtUtc: string;
+  cargoCapacity: number;
+  maxJumpRange: number;
+  fuelCapacityMain: number;
+  unladenMass: number;
+  rebuy: number;
+  hullValue: number;
+  modulesValue: number;
+  modules: ShipModuleSummary[];
 }
 
 export interface DashboardState {

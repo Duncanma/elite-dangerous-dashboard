@@ -27,6 +27,11 @@ fixtures/scratch/
 src/EliteDashboard.Host/wwwroot/*
 !src/EliteDashboard.Host/wwwroot/.gitkeep
 
+# Ship art backup - personal/user-supplied images, never committed
+# (publish.ps1 restores these into %LOCALAPPDATA%\EliteDashboard\ship-art)
+ship-art/*
+!ship-art/README.md
+
 # OS
 .DS_Store
 Thumbs.db

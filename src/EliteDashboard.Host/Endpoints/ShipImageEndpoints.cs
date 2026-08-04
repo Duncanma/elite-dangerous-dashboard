@@ -3,8 +3,9 @@ namespace EliteDashboard.Host.Endpoints;
 /// <summary>
 /// Serves a badge image per ship. No stable, legal source of real ship
 /// artwork was found automatically (EDAssets.org is a JS-rendered SPA with no
-/// discoverable API; the Fandom wiki sits behind Cloudflare bot protection),
-/// so real art is instead user-supplied under
+/// discoverable API; the Fandom wiki's pages are behind Cloudflare bot
+/// protection, though its static asset CDN serves direct image URLs fine).
+/// Real art is instead user-supplied under
 /// <c>%LOCALAPPDATA%\EliteDashboard\ship-art\</c> - never checked into the
 /// repo, since it's personal/possibly-not-freely-licensed and specific to
 /// each install:

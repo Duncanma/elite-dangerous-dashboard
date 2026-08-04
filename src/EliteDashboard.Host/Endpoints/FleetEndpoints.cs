@@ -1,3 +1,4 @@
+using System.Text.Json;
 using EliteDashboard.Data;
 using EliteDashboard.Data.Entities;
 using EliteDashboard.Domain;
@@ -18,6 +19,35 @@ public static class FleetEndpoints
         var group = app.MapGroup("/api/fleet");
 
         group.MapGet("/", (StateStore store) => Results.Ok(new { fleet = store.Current.Fleet, currentShipModules = store.Current.CurrentShipModules }));
+
+        // The last Loadout snapshot recorded for a ship, or 404 if none was
+        // ever seen (stored ships only get one when boarded - the journal
+        // exposes module detail for the flown ship only).
+        group.MapGet("/{shipId:int}/loadout", async (IDbContextFactory<DashboardDbContext> factory, int shipId) =>
+        {
+            await using var db = await factory.CreateDbContextAsync();
+            var loadout = await db.ShipLoadouts.AsNoTracking().SingleOrDefaultAsync(l => l.ShipId == shipId);
+            if (loadout is null)
+            {
+                return Results.NotFound();
+            }
+
+            var modules = JsonSerializer.Deserialize<List<ShipModuleSummary>>(loadout.ModulesJson) ?? [];
+            return Results.Ok(new
+            {
+                loadout.ShipId,
+                loadout.ShipType,
+                loadout.SeenAtUtc,
+                loadout.CargoCapacity,
+                loadout.MaxJumpRange,
+                loadout.FuelCapacityMain,
+                loadout.UnladenMass,
+                loadout.Rebuy,
+                loadout.HullValue,
+                loadout.ModulesValue,
+                Modules = modules,
+            });
+        });
 
         // Keyed by Frontier's internal ship symbol (ShipSummary.shipType) so
         // the frontend can enrich any ship card with a single extra fetch.

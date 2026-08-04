@@ -69,6 +69,12 @@ public sealed record LoadoutModule
     public ModuleEngineering? Engineering { get; init; }
 }
 
+/// <summary>FuelCapacity block on Loadout - main tank size in tonnes. The reserve tank is an internal HUD detail, deliberately not modelled.</summary>
+public sealed record FuelCapacityInfo
+{
+    public double Main { get; init; }
+}
+
 /// <summary>LandingPads block on Docked - real per-station pad counts, more precise than inferring from StationType.</summary>
 public sealed record LandingPadCounts
 {
