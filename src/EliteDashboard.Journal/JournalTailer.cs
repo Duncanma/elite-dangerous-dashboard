@@ -91,7 +91,9 @@ public sealed class JournalTailer : IDisposable
         }
     }
 
-    private void Tick()
+    // Internal (not private) so tests can drive a tick synchronously instead
+    // of waiting on the poll timer.
+    internal void Tick()
     {
         lock (_lock)
         {
@@ -120,12 +122,19 @@ public sealed class JournalTailer : IDisposable
                     }
                 }
 
-                ReadNewData();
-            }
-            catch (IOException ex)
-            {
-                _logger.LogDebug(ex, "Transient IO error while tailing journal; will retry next tick");
-            }
+            ReadNewData();
+        }
+        catch (IOException ex)
+        {
+            _logger.LogDebug(ex, "Transient IO error while tailing journal; will retry next tick");
+        }
+        catch (Exception ex)
+        {
+            // Anything else unexpected (a surprise from the filesystem, a bug
+            // in this class) must not kill the poll timer either - an
+            // exception escaping a timer callback terminates the process.
+            _logger.LogWarning(ex, "Unexpected error while tailing journal; will retry next tick");
+        }
         }
     }
 
@@ -176,7 +185,18 @@ public sealed class JournalTailer : IDisposable
             }
 
             _lineNumber++;
-            LineRead?.Invoke(new JournalLine(_currentFile, _lineNumber, line));
+            try
+            {
+                LineRead?.Invoke(new JournalLine(_currentFile, _lineNumber, line));
+            }
+            catch (Exception ex)
+            {
+                // Subscribers (parser, reconciler) run synchronously here,
+                // ultimately from the poll timer - an escaping exception
+                // would take down the whole host. One malformed/unexpected
+                // line must not kill the tail: log it and move on.
+                _logger.LogError(ex, "Failed to process journal line {LineNumber} in {File}; skipping it", _lineNumber, _currentFile);
+            }
         }
 
         _partialLine = lines[^1];

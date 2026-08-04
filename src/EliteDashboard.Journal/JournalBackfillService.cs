@@ -1,4 +1,4 @@
-using System.Text;
+using System.Globalization;
 using EliteDashboard.Data;
 using EliteDashboard.Data.Entities;
 using EliteDashboard.Domain;
@@ -8,16 +8,24 @@ using Microsoft.Extensions.Logging;
 namespace EliteDashboard.Journal;
 
 /// <summary>
-/// One-time import of journal files older than the current session. The live
-/// JournalTailer only ever reads the current/latest file (needed to rebuild
-/// in-memory state from scratch on every restart) - without this, years of
-/// real history sitting in Saved Games would never reach the Economics and
-/// Powerplay charts. Tracked via an AppSetting flag so years of files aren't
-/// re-scanned on every subsequent startup.
+/// Replays completed journal files through the same reconciler path the live
+/// tailer uses, so historical sessions rebuild into state and archive. Progress
+/// is tracked as a high-water mark (the newest file-write time processed), so
+/// every startup also picks up sessions that ran while the app was offline.
+/// Reprocessing is safe: every persisted row is guarded by a
+/// (JournalFile, LineNumber) or replay-dedup existence check, so a second pass
+/// is a stream of cheap no-ops. The current (latest) file is always excluded -
+/// the live tailer owns it.
 /// </summary>
 public sealed class JournalBackfillService
 {
-    private const string BackfillCompleteSettingKey = "Journal.BackfillCompleteUtc";
+    private const string ProcessedThroughSettingKey = "Journal.BackfillProcessedThroughUtc";
+
+    // The original once-ever flag. Kept only as a migration source: installs
+    // that already ran it get their high-water mark seeded from its timestamp
+    // on the first run of this version, which picks up exactly the sessions
+    // the old backfill missed.
+    private const string LegacyCompleteSettingKey = "Journal.BackfillCompleteUtc";
 
     private readonly JournalOptions _options;
     private readonly JournalStateReconciler _reconciler;
@@ -28,7 +36,8 @@ public sealed class JournalBackfillService
 
     public JournalBackfillService(
         JournalOptions options, JournalStateReconciler reconciler, DbWriteQueue writeQueue,
-        StateStore store, IDbContextFactory<DashboardDbContext> dbContextFactory, ILogger<JournalBackfillService> logger)
+        StateStore store, IDbContextFactory<DashboardDbContext> dbContextFactory,
+        ILogger<JournalBackfillService> logger)
     {
         _options = options;
         _reconciler = reconciler;
@@ -40,57 +49,52 @@ public sealed class JournalBackfillService
 
     public async Task BackfillIfNeededAsync(CancellationToken ct = default)
     {
-        await using (var db = await _dbContextFactory.CreateDbContextAsync(ct))
-        {
-            if (await db.AppSettings.FindAsync([BackfillCompleteSettingKey], ct) is not null)
-            {
-                return;
-            }
-        }
+        var processedThrough = await LoadHighWaterMarkAsync(ct);
 
         var directory = JournalFileSetLocator.ResolveJournalDirectory(_options.JournalPathOverride);
         if (!Directory.Exists(directory))
         {
+            _logger.LogInformation("Journal directory {Directory} does not exist yet; skipping backfill", directory);
             return;
         }
 
-        // The current/latest file is excluded here - JournalTailer replays
-        // that one itself (and needs to keep doing so on every restart to
-        // rebuild live state), so backfilling it too would just be redundant
-        // work protected by the same dedup keys either way.
+        // The tailer owns the current (latest) file; only completed files are
+        // backfilled, and only those written after the high-water mark.
         var latest = JournalFileSetLocator.FindLatestJournalFile(directory);
-        var historicalFiles = new DirectoryInfo(directory)
+        var filesToProcess = new DirectoryInfo(directory)
             .GetFiles("Journal.*.log")
             .Where(f => latest is null || !string.Equals(f.FullName, latest.FullName, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(f => f.Name, StringComparer.Ordinal)
+            .Where(f => processedThrough is null || f.LastWriteTimeUtc > processedThrough.Value.UtcDateTime)
+            .OrderBy(f => f.LastWriteTimeUtc)
             .ToList();
 
-        if (historicalFiles.Count == 0)
+        if (filesToProcess.Count == 0)
         {
-            await MarkCompleteAsync(ct);
+            _logger.LogInformation("Journal backfill: nothing new to process");
             return;
         }
 
-        _logger.LogInformation("Backfilling {Count} historical journal files (one-time)", historicalFiles.Count);
+        _logger.LogInformation("Backfilling {Count} journal files", filesToProcess.Count);
 
-        // Historical data should never make an already-open dashboard
-        // flicker through years of the past - JournalTailer's own replay of
-        // the current file (right after this) leaves Current fully correct.
+        // Suppress store notifications during backfill: replaying years of
+        // history would otherwise spam SignalR pushes that are immediately
+        // superseded. The frontend fetches a full snapshot once it connects.
         _store.SuppressNotifications = true;
         try
         {
             var totalLines = 0;
-            foreach (var file in historicalFiles)
+            var maxProcessedWriteUtc = DateTime.MinValue;
+            foreach (var file in filesToProcess)
             {
                 totalLines += await BackfillFileAsync(file, ct);
+                if (file.LastWriteTimeUtc > maxProcessedWriteUtc)
+                {
+                    maxProcessedWriteUtc = file.LastWriteTimeUtc;
+                }
             }
 
-            // DbWriteQueue is strictly FIFO/serial - awaiting one final write
-            // here guarantees every write enqueued by the lines above (via
-            // the reconciler's normal fire-and-forget archiving/recording)
-            // has already completed before this method returns.
-            await MarkCompleteAsync(ct);
-            _logger.LogInformation("Historical journal backfill complete: {Files} files, {Lines} lines", historicalFiles.Count, totalLines);
+            await UpdateHighWaterMarkAsync(maxProcessedWriteUtc, ct);
+            _logger.LogInformation("Journal backfill complete: {Files} files, {Lines} lines", filesToProcess.Count, totalLines);
         }
         finally
         {
@@ -98,38 +102,68 @@ public sealed class JournalBackfillService
         }
     }
 
+    private async Task<DateTimeOffset?> LoadHighWaterMarkAsync(CancellationToken ct)
+    {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+
+        var mark = await db.AppSettings.FindAsync([ProcessedThroughSettingKey], ct);
+        if (mark is not null &&
+            DateTimeOffset.TryParse(mark.Value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed))
+        {
+            return parsed;
+        }
+
+        var legacy = await db.AppSettings.FindAsync([LegacyCompleteSettingKey], ct);
+        if (legacy is not null &&
+            DateTimeOffset.TryParse(legacy.Value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var legacyParsed))
+        {
+            return legacyParsed;
+        }
+
+        return null;
+    }
+
     private async Task<int> BackfillFileAsync(FileInfo file, CancellationToken ct)
     {
-        using var stream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        using var reader = new StreamReader(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        _logger.LogInformation("Backfilling journal file {File}", file.Name);
 
-        var lineNumber = 0L;
-        string? rawLine;
-        while ((rawLine = await reader.ReadLineAsync(ct)) is not null)
+        var lineNumber = 0;
+        using var stream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new StreamReader(stream);
+        string? line;
+        while ((line = await reader.ReadLineAsync(ct)) is not null)
         {
-            lineNumber++;
-            var line = rawLine.TrimEnd('\r');
-            if (line.Length == 0)
+            ct.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(line))
             {
                 continue;
             }
 
-            if (line[0] == '﻿')
-            {
-                line = line[1..];
-            }
-
+            lineNumber++;
             _reconciler.Handle(new JournalLine(file.FullName, lineNumber, line));
         }
 
-        return (int)lineNumber;
+        return lineNumber;
     }
 
-    private async Task MarkCompleteAsync(CancellationToken ct)
+    private async Task UpdateHighWaterMarkAsync(DateTime throughUtc, CancellationToken ct)
     {
+        // The write queue is FIFO: awaiting this one final write guarantees
+        // every write enqueued by the lines above (via the reconciler's normal
+        // fire-and-forget archiving/recording) has already completed.
         await _writeQueue.EnqueueAsync(async (db, innerCt) =>
         {
-            db.AppSettings.Add(new AppSetting { Key = BackfillCompleteSettingKey, Value = DateTimeOffset.UtcNow.ToString("O") });
+            var value = new DateTimeOffset(throughUtc, TimeSpan.Zero).ToString("O");
+            var existing = await db.AppSettings.FindAsync([ProcessedThroughSettingKey], innerCt);
+            if (existing is null)
+            {
+                db.AppSettings.Add(new AppSetting { Key = ProcessedThroughSettingKey, Value = value });
+            }
+            else
+            {
+                existing.Value = value;
+            }
+
             await db.SaveChangesAsync(innerCt);
         });
     }

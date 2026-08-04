@@ -142,6 +142,29 @@ public sealed class JournalStateReconciler
                 _store.Update(s => s with { Docked = false, CurrentStation = null, LastUpdatedUtc = e.Timestamp });
                 break;
 
+            // Fires instead of FSDJump/Docked when a session starts already in
+            // a system (login, or right after a Resurrect respawn) - the only
+            // other source of current-location/coordinates.
+            case LocationEvent e:
+                _store.Update(s => s with
+                {
+                    CurrentSystem = e.StarSystem,
+                    CurrentStation = e.Docked ? e.StationName : null,
+                    Docked = e.Docked,
+                    LastUpdatedUtc = e.Timestamp,
+                });
+                if (e.StarSystem is not null && e.StarPos is { Length: 3 } locationPos)
+                {
+                    _ = UpsertSystemCoordinatesAsync(e.StarSystem, locationPos[0], locationPos[1], locationPos[2]);
+                }
+
+                if (e.Docked && e.MarketID != 0 && e.StationName is not null && e.StarSystem is not null)
+                {
+                    _ = UpsertStationFromDockAsync(e.MarketID, e.StationName, e.StationType, e.StarSystem, null);
+                }
+
+                break;
+
             case RankEvent e:
                 // Merge onto the existing Rank rather than replacing it - the
                 // Progress event (in-tier percent) arrives separately and
@@ -206,10 +229,13 @@ public sealed class JournalStateReconciler
                     Rebuy = e.Rebuy,
                     HullValue = e.HullValue,
                     ModulesValue = e.ModulesValue,
-                    CurrentShipModules = e.Modules.Select(ToModuleSummary).ToList(),
+                    // STJ honors an explicit JSON null even though the record
+                    // initializes Modules to [] - treat null as empty.
+                    CurrentShipModules = (e.Modules ?? []).Select(ToModuleSummary).ToList(),
                     Fleet = ReconcileFleetForCurrentShip(s, e),
                     LastUpdatedUtc = e.Timestamp,
                 });
+                _ = PersistFleetSyncAsync(_store.Current.Fleet);
 
                 // Unlike LoadGame's ShipLocalised, Loadout never carries a
                 // display name for the ship - without this, swapping ships
@@ -224,6 +250,7 @@ public sealed class JournalStateReconciler
                     Fleet = BuildFleet(s, e),
                     LastUpdatedUtc = e.Timestamp,
                 });
+                _ = PersistFleetSyncAsync(_store.Current.Fleet);
                 break;
 
             case MarketBuyEvent e:
@@ -262,6 +289,34 @@ public sealed class JournalStateReconciler
 
             case RepairEvent e:
                 RecordTransaction(line, e.Timestamp, TransactionCategory.Repair, -e.Cost, "Ship repair");
+                break;
+
+            case RepairAllEvent e:
+                RecordTransaction(line, e.Timestamp, TransactionCategory.Repair, -e.Cost, "Repaired all modules");
+                break;
+
+            case BuyAmmoEvent e:
+                RecordTransaction(line, e.Timestamp, TransactionCategory.Rearm, -e.Cost, "Restocked ammunition");
+                break;
+
+            case BuyDronesEvent e:
+                RecordTransaction(line, e.Timestamp, TransactionCategory.Rearm, -e.TotalCost, "Bought limpet drones");
+                break;
+
+            // "free" respawns (e.g. covered by insurance in some circumstances)
+            // carry no real Cost - only record an actual rebuy expense.
+            case ResurrectEvent e when e.Cost > 0:
+                RecordTransaction(line, e.Timestamp, TransactionCategory.Rebuy, -e.Cost, $"Ship rebuy ({e.Option})");
+                break;
+
+            case SearchAndRescueEvent e when e.Reward > 0:
+                RecordTransaction(line, e.Timestamp, TransactionCategory.SearchAndRescue, e.Reward,
+                    e.NameLocalised is { } srName ? $"Search and Rescue: {srName}" : "Search and Rescue");
+                break;
+
+            case NpcCrewPaidWageEvent e when e.Amount > 0:
+                RecordTransaction(line, e.Timestamp, TransactionCategory.CrewWages, -e.Amount,
+                    e.NpcCrewName is { } crewName ? $"Crew wage: {crewName}" : "Crew wage");
                 break;
 
             case ShipyardBuyEvent e:
@@ -463,7 +518,7 @@ public sealed class JournalStateReconciler
             // The event always carries the full current snapshot, not a delta -
             // replace the resource list wholesale rather than trying to diff it.
             db.ColonisationResourceRequirements.RemoveRange(site.Resources);
-            site.Resources = e.ResourcesRequired.Select(r => new ColonisationResourceRequirement
+            site.Resources = (e.ResourcesRequired ?? []).Select(r => new ColonisationResourceRequirement
             {
                 ColonisationSiteId = site.Id,
                 CommodityName = r.Name ?? "unknown",
@@ -601,14 +656,14 @@ public sealed class JournalStateReconciler
             if (ship.ShipId == e.ShipID)
             {
                 found = true;
-                return ship with { Location = ShipLocationKind.Current };
+                return ship with { Location = ShipLocationKind.Current, StarSystem = s.CurrentSystem, Station = s.CurrentStation };
             }
 
             // Ship swaps happen while docked, so the ship just swapped out of
             // is most likely now sitting in storage at the current station -
             // the next real StoredShips visit corrects this if that's wrong.
             return ship.Location == ShipLocationKind.Current
-                ? ship with { Location = ShipLocationKind.Here, StarSystem = s.CurrentSystem }
+                ? ship with { Location = ShipLocationKind.Here, StarSystem = s.CurrentSystem, Station = s.CurrentStation }
                 : ship;
         }).ToList();
 
@@ -623,6 +678,7 @@ public sealed class JournalStateReconciler
                 ShipType = e.Ship,
                 Name = NormalizeName(e.ShipName),
                 StarSystem = s.CurrentSystem,
+                Station = s.CurrentStation,
                 Location = ShipLocationKind.Current,
             });
         }
@@ -704,32 +760,95 @@ public sealed class JournalStateReconciler
                 ShipTypeDisplay = current.ShipTypeDisplay,
                 Name = current.ShipName,
                 StarSystem = current.CurrentSystem,
+                Station = current.CurrentStation,
                 Location = ShipLocationKind.Current,
             });
         }
 
-        foreach (var ship in e.ShipsHere)
+        // ShipsHere/ShipsRemote can arrive as explicit JSON null (see Loadout).
+        // Unlike ShipsRemote entries, the event names the exact station for
+        // ShipsHere (it's wherever this StoredShips event fired), even though
+        // that's a top-level field rather than per-ship.
+        foreach (var ship in e.ShipsHere ?? [])
         {
-            fleet.Add(ToSummary(ship, e.StarSystem, ShipLocationKind.Here));
+            fleet.Add(ToSummary(ship, e.StarSystem, e.StationName, ShipLocationKind.Here));
         }
 
-        foreach (var ship in e.ShipsRemote)
+        foreach (var ship in e.ShipsRemote ?? [])
         {
-            fleet.Add(ToSummary(ship, ship.StarSystem, ship.InTransit ? ShipLocationKind.InTransit : ShipLocationKind.Remote));
+            fleet.Add(ToSummary(ship, ship.StarSystem, null, ship.InTransit ? ShipLocationKind.InTransit : ShipLocationKind.Remote));
         }
 
         return fleet;
     }
 
-    private static ShipSummary ToSummary(StoredShipEntry ship, string? starSystem, ShipLocationKind location) => new()
+    private static ShipSummary ToSummary(StoredShipEntry ship, string? starSystem, string? station, ShipLocationKind location) => new()
     {
         ShipId = ship.ShipID,
         ShipType = ship.ShipType,
         ShipTypeDisplay = ship.ShipTypeLocalised ?? ship.ShipType,
         Name = NormalizeName(ship.Name),
+        Station = station,
         StarSystem = starSystem,
         Location = location,
     };
+
+    private async Task PersistFleetSyncAsync(IReadOnlyList<ShipSummary> fleet)
+    {
+        var snapshot = fleet.Select(f => new Data.Entities.Ship
+        {
+            ShipId = f.ShipId,
+            ShipType = f.ShipType,
+            ShipTypeDisplay = f.ShipTypeDisplay,
+            Name = f.Name,
+            StarSystem = f.StarSystem,
+            Station = f.Station,
+            Location = f.Location.ToString(),
+            LastUpdatedUtc = DateTime.UtcNow,
+        }).ToList();
+
+        await _writeQueue.EnqueueAsync(async (db, ct) =>
+        {
+            // The reconciled in-memory fleet (from StoredShips or a Loadout
+            // swap) is always the complete, authoritative membership at that
+            // moment - a full resync, not a per-row upsert, is correct here,
+            // including dropping ships that were sold since the last sync.
+            db.Ships.RemoveRange(db.Ships);
+            db.Ships.AddRange(snapshot);
+            await db.SaveChangesAsync(ct);
+        });
+    }
+
+    /// <summary>
+    /// Seeds StateStore.Fleet from the durable Ship table before any journal
+    /// replay happens. See Ship's doc comment for why: StoredShips is a
+    /// sparse, player-triggered event that can fall outside
+    /// JournalBackfillService's high-water mark on a later restart, and
+    /// StateStore never persists across restarts on its own - without this,
+    /// the fleet would silently collapse to just the currently-flown ship.
+    /// </summary>
+    public async Task SeedFleetFromDatabaseAsync(CancellationToken ct = default)
+    {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var ships = await db.Ships.AsNoTracking().ToListAsync(ct);
+        if (ships.Count == 0)
+        {
+            return;
+        }
+
+        var fleet = ships.Select(s => new ShipSummary
+        {
+            ShipId = s.ShipId,
+            ShipType = s.ShipType,
+            ShipTypeDisplay = s.ShipTypeDisplay,
+            Name = s.Name,
+            StarSystem = s.StarSystem,
+            Station = s.Station,
+            Location = Enum.TryParse<ShipLocationKind>(s.Location, out var kind) ? kind : ShipLocationKind.Remote,
+        }).ToList();
+
+        _store.Update(current => current with { Fleet = fleet });
+    }
 
     /// <summary>
     /// The journal isn't consistent about how "no custom name" is represented

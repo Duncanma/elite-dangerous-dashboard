@@ -22,5 +22,13 @@ public sealed record ShipSummary
     public string? ShipTypeDisplay { get; init; }
     public string? Name { get; init; }
     public string? StarSystem { get; init; }
+
+    /// <summary>
+    /// Known for Current and Here (the journal names the exact station in
+    /// both cases); genuinely unknown for Remote - StoredShips' ShipsRemote
+    /// entries carry only a StarSystem, never a station name.
+    /// </summary>
+    public string? Station { get; init; }
+
     public ShipLocationKind Location { get; init; }
 }

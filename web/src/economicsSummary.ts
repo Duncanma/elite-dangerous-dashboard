@@ -36,6 +36,14 @@ function bucketLabel(category: TransactionCategory): string {
       return "Repairs";
     case "Refuel":
       return "Refuelling";
+    case "Rearm":
+      return "Ammo & drones";
+    case "Rebuy":
+      return "Ship rebuy";
+    case "SearchAndRescue":
+      return "Search and rescue";
+    case "CrewWages":
+      return "Crew wages";
     case "Other":
       return "Other";
   }

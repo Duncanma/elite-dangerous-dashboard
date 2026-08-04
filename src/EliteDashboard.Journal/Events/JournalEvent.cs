@@ -156,6 +156,61 @@ public sealed record RepairEvent : JournalEvent
     public long Cost { get; init; }
 }
 
+/// <summary>The "repair all modules" action - a separate event from Repair (which is a single module).</summary>
+public sealed record RepairAllEvent : JournalEvent
+{
+    public long Cost { get; init; }
+}
+
+public sealed record BuyAmmoEvent : JournalEvent
+{
+    public long Cost { get; init; }
+}
+
+public sealed record BuyDronesEvent : JournalEvent
+{
+    public int Count { get; init; }
+    public long TotalCost { get; init; }
+}
+
+/// <summary>Fired when choosing a respawn option after Died. Option is "rebuy" or "free"; only "rebuy" carries a real Cost.</summary>
+public sealed record ResurrectEvent : JournalEvent
+{
+    public string? Option { get; init; }
+    public long Cost { get; init; }
+    public bool Bankrupt { get; init; }
+}
+
+/// <summary>Fired when handing in salvage (escape pods, black boxes, etc.) at a station's search-and-rescue contact.</summary>
+public sealed record SearchAndRescueEvent : JournalEvent
+{
+    [System.Text.Json.Serialization.JsonPropertyName("Name_Localised")]
+    public string? NameLocalised { get; init; }
+
+    public long Reward { get; init; }
+}
+
+public sealed record NpcCrewPaidWageEvent : JournalEvent
+{
+    public string? NpcCrewName { get; init; }
+    public long Amount { get; init; }
+}
+
+/// <summary>
+/// Fired instead of FSDJump/Docked when a session starts already in a system
+/// (e.g. right after login, or after a Resurrect respawn) - the only other
+/// source of StarPos/current-station info besides those two events.
+/// </summary>
+public sealed record LocationEvent : JournalEvent
+{
+    public string? StarSystem { get; init; }
+    public double[]? StarPos { get; init; }
+    public bool Docked { get; init; }
+    public string? StationName { get; init; }
+    public string? StationType { get; init; }
+    public long MarketID { get; init; }
+}
+
 public sealed record ShipyardBuyEvent : JournalEvent
 {
     public string? ShipType { get; init; }

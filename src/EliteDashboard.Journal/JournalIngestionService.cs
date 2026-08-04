@@ -29,14 +29,22 @@ public sealed class JournalIngestionService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Must happen before any replay: DashboardState.Fleet only ever comes
+        // from replaying StoredShips/Loadout lines, and JournalBackfillService's
+        // high-water mark means old files aren't replayed forever - this
+        // restores whatever the durable Ship table already knows as a
+        // baseline, so a restart can't silently lose fleet membership.
+        await _reconciler.SeedFleetFromDatabaseAsync(stoppingToken);
+
         _tailer.LineRead += _reconciler.Handle;
 
-        // Runs once ever (tracked via an AppSetting flag) - importing years
-        // of historical journal files before the live tailer takes over the
-        // current one. This doesn't block the Host from accepting requests
-        // (BackgroundService.ExecuteAsync running long is expected), just
-        // means Economics/Powerplay history fills in progressively on the
-        // very first startup after this feature shipped.
+        // Replays completed journal files before the live tailer takes over
+        // the current one: years of history on first run, then just the
+        // sessions played while the app was offline (tracked via a
+        // high-water-mark AppSetting). This doesn't block the Host from
+        // accepting requests (BackgroundService.ExecuteAsync running long is
+        // expected), just means history fills in progressively during
+        // startup.
         await _backfillService.BackfillIfNeededAsync(stoppingToken);
 
         _tailer.Start();

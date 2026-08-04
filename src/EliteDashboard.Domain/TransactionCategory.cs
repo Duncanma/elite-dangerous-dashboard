@@ -12,5 +12,9 @@ public enum TransactionCategory
     Refuel,
     ShipyardBuy,
     ShipyardSell,
+    Rearm,
+    Rebuy,
+    SearchAndRescue,
+    CrewWages,
     Other,
 }

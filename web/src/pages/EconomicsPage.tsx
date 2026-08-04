@@ -15,6 +15,10 @@ const CATEGORY_LABELS: Record<TransactionCategory, string> = {
   Refuel: "Refuel",
   ShipyardBuy: "Ship purchase",
   ShipyardSell: "Ship sale",
+  Rearm: "Ammo/drones",
+  Rebuy: "Ship rebuy",
+  SearchAndRescue: "Search and rescue",
+  CrewWages: "Crew wage",
   Other: "Other",
 };
 

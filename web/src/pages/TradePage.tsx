@@ -261,8 +261,8 @@ export default function TradePage() {
               <div className="card-row" key={h.id}>
                 <span className="label">
                   {h.sequenceNumber + 1}. {h.commodityName}: <StationIcon stationType={h.originStationType} />
-                  {h.originStationName} → <StationIcon stationType={h.destinationStationType} />
-                  {h.destinationStationName}
+                  {h.originStationName} ({h.originSystemName}) → <StationIcon stationType={h.destinationStationType} />
+                  {h.destinationStationName} ({h.destinationSystemName})
                   {h.soldUtc ? (
                     <span className="chip legal-clean module-off-chip">done</span>
                   ) : h.boughtUtc ? (

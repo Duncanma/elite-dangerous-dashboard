@@ -348,6 +348,45 @@ namespace EliteDashboard.Data.Migrations
                     b.ToTable("PowerplayStandingHistories");
                 });
 
+            modelBuilder.Entity("EliteDashboard.Data.Entities.Ship", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("LastUpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ShipId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ShipType")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ShipTypeDisplay")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StarSystem")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Station")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ShipId")
+                        .IsUnique();
+
+                    b.ToTable("Ships");
+                });
+
             modelBuilder.Entity("EliteDashboard.Data.Entities.ShipStaticSpec", b =>
                 {
                     b.Property<long>("Id")

@@ -4,7 +4,7 @@ import { useWishlist } from "../useWishlist";
 import { useShipSpecs, lookupShipSpec } from "../useShipSpecs";
 import { useModuleSpecs, moduleDisplayName } from "../useModuleSpecs";
 import { shipImageUrl, sizeClassLabel } from "../api";
-import { formatCredits, locationLabel } from "../shipLabels";
+import { formatCredits, shipLocationText } from "../shipLabels";
 
 export default function FleetPage() {
   const { state } = useDashboardState();
@@ -48,7 +48,9 @@ export default function FleetPage() {
                     {ship.location === "Current" ? <span className="chip legal-clean ship-active-chip">active</span> : null}
                   </div>
                   <div className="ship-card-type">{ship.shipTypeDisplay ?? ship.shipType}</div>
-                  <div className="ship-card-location">{locationLabel(ship)}</div>
+                  <div className="ship-card-location">
+                    {shipLocationText(ship, { system: state.currentSystem, station: state.currentStation })}
+                  </div>
                   {spec ? (
                     <div className="ship-card-specs">
                       {spec.manufacturer ? `${spec.manufacturer} · ` : ""}

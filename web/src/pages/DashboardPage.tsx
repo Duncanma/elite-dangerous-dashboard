@@ -2,7 +2,7 @@ import { useDashboardState } from "../useDashboardState";
 import { useTrade } from "../useTrade";
 import { useShipSpecs, lookupShipSpec } from "../useShipSpecs";
 import { shipImageUrl } from "../api";
-import { formatCredits, locationLabel } from "../shipLabels";
+import { formatCredits, shipLocationText } from "../shipLabels";
 import { rankLabel } from "../rankLabels";
 import { factionIconUrl } from "../factionArt";
 import { MaskIcon } from "../MaskIcon";
@@ -78,7 +78,7 @@ export default function DashboardPage() {
           <span className="label">Location</span>
           <span className="value">
             {state.currentSystem ?? "Unknown"}
-            {state.docked && state.currentStation ? ` — docked at ${state.currentStation}` : ""}
+            {state.docked && state.currentStation ? ` — ${state.currentStation}` : ""}
           </span>
         </div>
         <div className="card-row">
@@ -166,7 +166,9 @@ export default function DashboardPage() {
                 {ship.name ? ship.name : ship.shipTypeDisplay ?? ship.shipType ?? "Unknown ship"}
                 {ship.location === "Current" ? " (active)" : ""}
               </span>
-              <span className="value">{locationLabel(ship)}</span>
+              <span className="value">
+                {shipLocationText(ship, { system: state.currentSystem, station: state.currentStation })}
+              </span>
             </div>
           ))
         )}

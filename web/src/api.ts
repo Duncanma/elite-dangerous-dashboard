@@ -45,6 +45,7 @@ export interface ShipSummary {
   shipTypeDisplay: string | null;
   name: string | null;
   starSystem: string | null;
+  station: string | null;
   location: ShipLocationKind;
 }
 
@@ -97,6 +98,10 @@ export type TransactionCategory =
   | "Refuel"
   | "ShipyardBuy"
   | "ShipyardSell"
+  | "Rearm"
+  | "Rebuy"
+  | "SearchAndRescue"
+  | "CrewWages"
   | "Other";
 
 export interface Transaction {

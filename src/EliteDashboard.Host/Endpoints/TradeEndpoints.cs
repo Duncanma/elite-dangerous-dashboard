@@ -74,9 +74,7 @@ public static class TradeEndpoints
         group.MapPost("/search", async (TradeRouteEngine engine, IDbContextFactory<DashboardDbContext> factory, TradeSearchRequest request) =>
         {
             var criteria = await BuildCriteriaAsync(factory, request);
-            var hops = criteria.OriginStationId is null
-                ? await engine.FindSingleHopRoutesAsync(criteria, maxResults: Math.Max(1, request.MaxHops))
-                : await engine.FindMultiHopRouteAsync(criteria);
+            var hops = await engine.FindMultiHopRouteAsync(criteria);
 
             return Results.Ok(hops);
         });
@@ -84,9 +82,7 @@ public static class TradeEndpoints
         group.MapPost("/activate", async (TradeRouteEngine engine, TradeRoutePlanService planService, IDbContextFactory<DashboardDbContext> factory, TradeSearchRequest request) =>
         {
             var criteria = await BuildCriteriaAsync(factory, request);
-            var hops = criteria.OriginStationId is null
-                ? await engine.FindSingleHopRoutesAsync(criteria, maxResults: Math.Max(1, request.MaxHops))
-                : await engine.FindMultiHopRouteAsync(criteria);
+            var hops = await engine.FindMultiHopRouteAsync(criteria);
 
             if (hops.Count == 0)
             {

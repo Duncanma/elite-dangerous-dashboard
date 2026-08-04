@@ -25,6 +25,11 @@ public sealed class TradeRouteEngine
     private const int MaxEdsmLookupsPerSearch = 25;
     private const int MaxConcurrentEdsmLookups = 5;
 
+    // Same cutoff the ColonisationShippingPlanner applies to quotes. EDDN
+    // prices decay fast; a weeks-old quote is worse than no quote - it points
+    // you at markets that no longer exist.
+    private static readonly TimeSpan MaxQuoteAge = TimeSpan.FromDays(3);
+
     private readonly IDbContextFactory<DashboardDbContext> _contextFactory;
     private readonly SystemCoordinateResolver _coordinateResolver;
 
@@ -49,10 +54,11 @@ public sealed class TradeRouteEngine
             }
         }
 
+        var quoteCutoffUtc = DateTime.UtcNow - MaxQuoteAge;
         var quotes = await db.MarketPriceQuotes
             .Include(q => q.Station).ThenInclude(s => s!.StarSystem)
             .Include(q => q.Commodity)
-            .Where(q => q.Station != null && q.Commodity != null)
+            .Where(q => q.Station != null && q.Commodity != null && q.CollectedAtUtc >= quoteCutoffUtc)
             .ToListAsync(ct);
 
         quotes = quotes.Where(q => IsStationEligible(q.Station!, criteria)).ToList();
@@ -91,8 +97,13 @@ public sealed class TradeRouteEngine
 
         foreach (var group in quotes.GroupBy(q => q.CommodityId))
         {
-            var buyOptions = group.Where(q => q.BuyPrice > 0 && IsEligibleOrigin(q, criteria, origin, originRadiusLy));
-            var sellOptions = group.Where(q => q.SellPrice > 0).ToList();
+            // Supply/Demand > 0 is not redundant with the price checks: EDDN (and the
+            // game's own market screen) can report a nonzero cached price for a
+            // commodity that's currently out of stock / not wanted at all, which isn't
+            // actually tradeable - confirmed against real data where a station's last
+            // reported monazite quote had Supply=0 despite a real BuyPrice.
+            var buyOptions = group.Where(q => q.BuyPrice > 0 && q.Supply > 0 && IsEligibleOrigin(q, criteria, origin, originRadiusLy));
+            var sellOptions = group.Where(q => q.SellPrice > 0 && q.Demand > 0).ToList();
 
             foreach (var buy in buyOptions)
             {
@@ -116,10 +127,10 @@ public sealed class TradeRouteEngine
                     }
 
                     var maxAffordable = buy.BuyPrice > 0 ? (int)Math.Min(criteria.Credits / buy.BuyPrice, int.MaxValue) : 0;
-                    var quantity = new[] { criteria.CargoCapacity, maxAffordable, (int)Math.Min(buy.Supply, int.MaxValue), (int)Math.Min(sell.Demand, int.MaxValue) }
-                        .Where(v => v > 0)
-                        .DefaultIfEmpty(0)
-                        .Min();
+                    // Deliberately NOT filtering out zero entries before taking the min -
+                    // a real 0 here (out of stock, no demand, can't afford any) must zero
+                    // out the whole trade, not be treated as "no constraint from this dimension".
+                    var quantity = new[] { criteria.CargoCapacity, maxAffordable, (int)Math.Min(buy.Supply, int.MaxValue), (int)Math.Min(sell.Demand, int.MaxValue) }.Min();
 
                     if (quantity <= 0)
                     {
