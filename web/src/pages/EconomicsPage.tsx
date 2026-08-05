@@ -3,6 +3,7 @@ import { useEconomics } from "../useEconomics";
 import type { Transaction, TransactionCategory } from "../api";
 import { CHART_RANGES, filterAndGroup, formatHistorySpan, rangeShowsFullHistory, usePersistedChartRange } from "../chartRange";
 import { summarizeTransactions } from "../economicsSummary";
+import { formatCredits } from "../shipLabels";
 
 const CATEGORY_LABELS: Record<TransactionCategory, string> = {
   TradeBuy: "Trade (buy)",
@@ -21,11 +22,6 @@ const CATEGORY_LABELS: Record<TransactionCategory, string> = {
   CrewWages: "Crew wage",
   Other: "Other",
 };
-
-function formatCredits(amount: number): string {
-  const sign = amount > 0 ? "+" : "";
-  return sign + new Intl.NumberFormat().format(amount) + " CR";
-}
 
 function formatAxisCredits(amount: number): string {
   if (Math.abs(amount) >= 1_000_000) return `${(amount / 1_000_000).toFixed(0)}M`;
@@ -87,7 +83,7 @@ export default function EconomicsPage() {
                 <YAxis tickFormatter={formatAxisCredits} fontSize={12} width={56} />
                 <Tooltip
                   labelFormatter={(t) => new Date(t as number).toLocaleString()}
-                  formatter={(value) => [formatCredits(Number(value)), "Balance"]}
+                  formatter={(value) => [formatCredits(Number(value), { signed: true }), "Balance"]}
                 />
                 <Line type="monotone" dataKey="balance" stroke="var(--accent)" dot={false} strokeWidth={2} />
               </LineChart>
@@ -112,7 +108,7 @@ export default function EconomicsPage() {
                   txnSummary.income.map((line) => (
                     <div className="card-row" key={line.label}>
                       <span className="label">{line.label}</span>
-                      <span className="value amount-positive">{formatCredits(line.amount)}</span>
+                      <span className="value amount-positive">{formatCredits(line.amount, { signed: true })}</span>
                     </div>
                   ))
                 )}
@@ -125,7 +121,7 @@ export default function EconomicsPage() {
                   txnSummary.expenses.map((line) => (
                     <div className="card-row" key={line.label}>
                       <span className="label">{line.label}</span>
-                      <span className="value amount-negative">{formatCredits(line.amount)}</span>
+                      <span className="value amount-negative">{formatCredits(line.amount, { signed: true })}</span>
                     </div>
                   ))
                 )}
@@ -134,7 +130,7 @@ export default function EconomicsPage() {
             <div className="card-row txn-summary-net">
               <span className="label">Net</span>
               <span className={`value ${txnSummary.net >= 0 ? "amount-positive" : "amount-negative"}`}>
-                {formatCredits(txnSummary.net)}
+                {formatCredits(txnSummary.net, { signed: true })}
               </span>
             </div>
             {transactions.map((t: Transaction) => (
@@ -145,7 +141,7 @@ export default function EconomicsPage() {
                   <span className="txn-time"> · {new Date(t.timestampUtc).toLocaleString()}</span>
                 </span>
                 <span className={`value ${t.amount >= 0 ? "amount-positive" : "amount-negative"}`}>
-                  {formatCredits(t.amount)}
+                  {formatCredits(t.amount, { signed: true })}
                 </span>
               </div>
             ))}

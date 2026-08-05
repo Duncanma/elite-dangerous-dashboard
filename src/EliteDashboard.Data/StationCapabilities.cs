@@ -36,14 +36,20 @@ public static class StationCapabilities
     };
 
     /// <summary>
-    /// True/false when real pad counts are known or the station's type
-    /// reliably implies an answer either way; null when we genuinely don't know.
+    /// True/false when real pad counts, community-sourced data, or the
+    /// station's type reliably implies an answer either way; null when we
+    /// genuinely don't know.
     /// </summary>
     public static bool? SupportsLargePads(Station station)
     {
         if (station.LargePads.HasValue)
         {
             return station.LargePads.Value > 0;
+        }
+
+        if (station.CommunityMaxPadSizeClass.HasValue)
+        {
+            return station.CommunityMaxPadSizeClass.Value >= 3;
         }
 
         if (station.StationType is null)
@@ -67,12 +73,12 @@ public static class StationCapabilities
     /// <summary>
     /// Whether a ship of the given Coriolis size class (1=Small, 2=Medium,
     /// 3=Large - matches <see cref="ShipStaticSpec.SizeClass"/>) can dock
-    /// here. True/false when real pad counts or a reliable type give an
-    /// answer, null when genuinely unknown. Small and Medium are treated as
-    /// always-supported absent real evidence otherwise - every station type
-    /// observed in the commander's own dock history had at least one pad of
-    /// each; only Large-pad availability is unreliable enough to need the
-    /// careful handling in <see cref="SupportsLargePads"/>.
+    /// here. True/false when real pad counts, community-sourced data, or a
+    /// reliable type gives an answer, null when genuinely unknown. Small and
+    /// Medium are treated as always-supported absent real evidence otherwise
+    /// - every station type observed in the commander's own dock history had
+    /// at least one pad of each; only Large-pad availability is unreliable
+    /// enough to need the careful handling in <see cref="SupportsLargePads"/>.
     /// </summary>
     public static bool? SupportsShipSize(Station station, int shipSizeClass)
     {
@@ -88,11 +94,17 @@ public static class StationCapabilities
                 : station.LargePads.Value > 0;
         }
 
+        if (station.CommunityMaxPadSizeClass.HasValue)
+        {
+            return shipSizeClass <= station.CommunityMaxPadSizeClass.Value;
+        }
+
         return shipSizeClass == 2 ? true : SupportsLargePads(station);
     }
 
     public static bool IsPlanetary(Station station) =>
-        station.StationType is not null && PlanetaryStationTypes.Contains(station.StationType);
+        station.CommunityPlanetary
+        ?? (station.StationType is not null && PlanetaryStationTypes.Contains(station.StationType));
 
     public static bool IsFleetCarrier(Station station) =>
         string.Equals(station.StationType, "FleetCarrier", StringComparison.OrdinalIgnoreCase);

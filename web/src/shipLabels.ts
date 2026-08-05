@@ -1,7 +1,28 @@
 import type { ShipSummary } from "./api";
 
-export function formatCredits(credits: number): string {
-  return new Intl.NumberFormat().format(credits) + " CR";
+// Large credit amounts are common (fleet/hull values, net worth) and a full
+// "887,234,156 CR" is hard to scan at a glance - shorten to "887.2 M"/"3 K"
+// past 1,000/1,000,000, same convention as EconomicsPage's chart-axis
+// formatter. `signed` prefixes a "+" for positive amounts (negative amounts
+// already get their own "-" from the number formatting) - used by the
+// Economics page's income/expense/net figures, where the sign itself is
+// meaningful, not just implied by a green/red CSS class.
+export function formatCredits(credits: number, options?: { signed?: boolean }): string {
+  const sign = options?.signed && credits > 0 ? "+" : "";
+  const abs = Math.abs(credits);
+
+  if (abs >= 1_000_000) {
+    return sign + trimCompact(credits / 1_000_000) + " M";
+  }
+  if (abs >= 1_000) {
+    return sign + trimCompact(credits / 1_000) + " K";
+  }
+  return sign + new Intl.NumberFormat().format(credits) + " CR";
+}
+
+// One decimal place, but drop a trailing ".0" (2_000_000 -> "2", not "2.0").
+function trimCompact(value: number): string {
+  return value.toFixed(1).replace(/\.0$/, "");
 }
 
 // Just the real location, system and station where known - no interpretive

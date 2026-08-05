@@ -595,6 +595,12 @@ namespace EliteDashboard.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("CommunityMaxPadSizeClass")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool?>("CommunityPlanetary")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int?>("LargePads")
                         .HasColumnType("INTEGER");
 

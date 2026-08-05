@@ -109,7 +109,7 @@ describe("FleetPage ship loadout panel", () => {
     expect(screen.getByText(/Last seen/)).toBeTruthy();
     expect(screen.getByText("192 T")).toBeTruthy();
     expect(screen.getByText("41.25 LY")).toBeTruthy();
-    expect(screen.getByText("380,000,000 CR")).toBeTruthy();
+    expect(screen.getByText("380 M")).toBeTruthy();
     expect(screen.getByText("Life Support")).toBeTruthy();
   });
 

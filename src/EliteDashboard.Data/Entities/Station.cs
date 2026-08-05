@@ -26,6 +26,20 @@ public sealed class Station
     public int? MediumPads { get; set; }
     public int? LargePads { get; set; }
 
+    /// <summary>
+    /// Community-sourced from GalaxyDataImporter's periodic Station.csv import
+    /// (elite.tromador.com) - crowd-sourced across every commander who's ever
+    /// docked there, not just this one. 1=Small, 2=Medium, 3=Large, matching
+    /// ShipStaticSpec.SizeClass. Only ever set for stations this app already
+    /// has a row for; never used to create new Station rows (see
+    /// GalaxyDataImporter's doc comment for why it can't be - Tromador's
+    /// station IDs have no relationship to Frontier's own MarketId).
+    /// </summary>
+    public int? CommunityMaxPadSizeClass { get; set; }
+
+    /// <summary>Community-sourced planetary flag, same source/scope as <see cref="CommunityMaxPadSizeClass"/>.</summary>
+    public bool? CommunityPlanetary { get; set; }
+
     public DateTime LastUpdatedUtc { get; set; }
     public string LastUpdateSource { get; set; } = "Unknown";
 }
