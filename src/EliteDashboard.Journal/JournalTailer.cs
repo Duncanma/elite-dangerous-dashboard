@@ -108,6 +108,30 @@ public sealed class JournalTailer : IDisposable
 
                 if (_currentFile is null || !string.Equals(latest.FullName, _currentFile, StringComparison.OrdinalIgnoreCase))
                 {
+                    // The game appends to a part file right up to the moment it
+                    // rotates, and we never look at that file again once we've
+                    // switched - so drain whatever landed there since the last
+                    // tick before moving on. Without this, every rotation
+                    // silently drops a tick's worth of events (a market run's
+                    // MarketBuy/MarketSell among them); they only reappear on the
+                    // next restart, when the backfill picks the file up as a
+                    // completed one.
+                    if (_currentFile is not null)
+                    {
+                        try
+                        {
+                            ReadNewData();
+                        }
+                        catch (Exception ex)
+                        {
+                            // Best-effort: an outgoing file that's been deleted or
+                            // locked must not stop us switching to the new one.
+                            _logger.LogWarning(ex,
+                                "Could not drain {File} before rotating; any trailing lines will be picked up by the next backfill",
+                                _currentFile);
+                        }
+                    }
+
                     _logger.LogInformation("Switching journal tail target to {File}", latest.FullName);
                     _currentFile = latest.FullName;
                     _offset = 0;
