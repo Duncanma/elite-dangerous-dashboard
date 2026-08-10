@@ -87,7 +87,7 @@ Colonisation construction sites you’re building or actively contributing to.
 
 A site appears after you’ve delivered at least one load of cargo there, or claimed the system as architect — merely docking at someone else’s project does not add it.
 
-For each site you’ll see status (in progress / complete / failed), a progress bar, and remaining resources. **Generate shipping plan** suggests nearby suppliers for outstanding commodities (orbital preferred when possible), grouped into stops. Some commodities may remain unresolved if no priced supplier is known yet.
+For each site you’ll see status (in progress / complete / failed), a progress bar, remaining resources (with an optional shipping plan), and a summary of **your deliveries** (total tonnage and drop count; expand to see each drop).
 
 ---
 

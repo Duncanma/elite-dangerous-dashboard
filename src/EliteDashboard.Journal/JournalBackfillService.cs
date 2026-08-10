@@ -134,13 +134,13 @@ public sealed class JournalBackfillService
         while ((line = await reader.ReadLineAsync(ct)) is not null)
         {
             ct.ThrowIfCancellationRequested();
-            if (string.IsNullOrWhiteSpace(line))
+            if (JournalLineNumbering.IsBlankPhysicalLine(line))
             {
                 continue;
             }
 
             lineNumber++;
-            _reconciler.Handle(new JournalLine(file.FullName, lineNumber, line));
+            _reconciler.Handle(new JournalLine(file.FullName, lineNumber, JournalLineNumbering.NormalizeEmittedLine(line)));
         }
 
         return lineNumber;

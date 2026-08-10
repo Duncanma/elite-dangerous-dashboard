@@ -26,6 +26,12 @@ public static class ColonisationEndpoints
                 .Where(s => marketIds.Contains(s.MarketId))
                 .ToDictionaryAsync(s => s.MarketId);
 
+            var deliveriesByMarket = await db.ColonisationDeliveries.AsNoTracking()
+                .Where(d => marketIds.Contains(d.MarketId))
+                .OrderByDescending(d => d.TimestampUtc)
+                .ToListAsync();
+            var deliveriesLookup = deliveriesByMarket.ToLookup(d => d.MarketId);
+
             var claimedSystems = await db.ColonisationSystemClaims
                 .Where(c => !c.Released)
                 .Select(c => c.StarSystem)
@@ -52,6 +58,7 @@ public static class ColonisationEndpoints
             var dto = sites.Select(s =>
             {
                 stations.TryGetValue(s.MarketId, out var station);
+                var deliveries = deliveriesLookup[s.MarketId];
                 return new
                 {
                     s.Id,
@@ -71,6 +78,14 @@ public static class ColonisationEndpoints
                         r.ProvidedAmount,
                         r.Payment,
                     }),
+                    Deliveries = deliveries.Select(d => new
+                    {
+                        d.TimestampUtc,
+                        d.CommodityName,
+                        d.CommodityDisplayName,
+                        d.Amount,
+                    }),
+                    TotalDeliveredTons = deliveries.Sum(d => d.Amount),
                 };
             });
 

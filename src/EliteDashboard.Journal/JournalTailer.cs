@@ -173,16 +173,13 @@ public sealed class JournalTailer : IDisposable
         // or a partial line the game hasn't finished writing yet - buffer it.
         for (var i = 0; i < lines.Length - 1; i++)
         {
-            var line = lines[i].TrimEnd('\r');
-            if (line.Length == 0)
+            var raw = lines[i];
+            if (JournalLineNumbering.IsBlankPhysicalLine(raw))
             {
                 continue;
             }
 
-            if (line[0] == '\uFEFF')
-            {
-                line = line[1..];
-            }
+            var line = JournalLineNumbering.NormalizeEmittedLine(raw);
 
             _lineNumber++;
             try

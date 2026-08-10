@@ -1,4 +1,4 @@
-import type { Transaction, TransactionCategory } from "./api";
+import type { CategoryTotal, TransactionCategory } from "./api";
 
 export interface SummaryLine {
   label: string;
@@ -44,22 +44,32 @@ function bucketLabel(category: TransactionCategory): string {
       return "Search and rescue";
     case "CrewWages":
       return "Crew wages";
+    case "Outfitting":
+      return "Outfitting";
+    case "VehicleRestock":
+      return "Vehicle restock";
+    case "CrewHire":
+      return "Crew hire";
     case "Other":
       return "Other";
   }
 }
 
-export function summarizeTransactions(transactions: Transaction[]): TransactionSummary {
-  const totals = new Map<string, number>();
-  for (const t of transactions) {
+// Takes per-category totals (from GET /api/economics/transaction-summary),
+// not the raw transaction list - that endpoint aggregates server-side so the
+// summary reflects the whole selected range, not just whatever page of
+// transactions happens to be loaded client-side (see issue #3).
+export function summarizeCategoryTotals(categoryTotals: CategoryTotal[]): TransactionSummary {
+  const bucketTotals = new Map<string, number>();
+  for (const t of categoryTotals) {
     const label = bucketLabel(t.category);
-    totals.set(label, (totals.get(label) ?? 0) + t.amount);
+    bucketTotals.set(label, (bucketTotals.get(label) ?? 0) + t.amount);
   }
 
   const income: SummaryLine[] = [];
   const expenses: SummaryLine[] = [];
   let net = 0;
-  for (const [label, amount] of totals) {
+  for (const [label, amount] of bucketTotals) {
     net += amount;
     if (amount === 0) continue;
     (amount > 0 ? income : expenses).push({ label, amount });

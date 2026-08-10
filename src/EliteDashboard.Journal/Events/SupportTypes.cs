@@ -95,3 +95,14 @@ public sealed record ColonisationResourceEntry
     public long ProvidedAmount { get; init; }
     public long Payment { get; init; }
 }
+
+/// <summary>One entry in ColonisationContribution's Contributions array (cargo delivered).</summary>
+public sealed record ColonisationContributionEntry
+{
+    public string? Name { get; init; }
+
+    [JsonPropertyName("Name_Localised")]
+    public string? NameLocalised { get; init; }
+
+    public long Amount { get; init; }
+}

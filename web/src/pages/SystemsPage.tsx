@@ -18,10 +18,32 @@ function stationTypeLabel(stationType: string | null): string {
   return "orbital";
 }
 
+function groupDeliveries(deliveries: ColonisationSite["deliveries"]) {
+  const groups = new Map<
+    string,
+    { timestampUtc: string; totalTons: number; items: { name: string; amount: number }[] }
+  >();
+  for (const d of deliveries) {
+    const existing = groups.get(d.timestampUtc) ?? {
+      timestampUtc: d.timestampUtc,
+      totalTons: 0,
+      items: [],
+    };
+    existing.totalTons += d.amount;
+    existing.items.push({
+      name: d.commodityDisplayName ?? d.commodityName,
+      amount: d.amount,
+    });
+    groups.set(d.timestampUtc, existing);
+  }
+  return [...groups.values()];
+}
+
 export default function SystemsPage() {
   const { sites, generateShippingPlan } = useColonisation();
   const [plans, setPlans] = useState<Record<number, ShippingPlanResult>>({});
   const [loadingSiteId, setLoadingSiteId] = useState<number | null>(null);
+  const [expandedDeliveries, setExpandedDeliveries] = useState<Record<number, boolean>>({});
 
   const handleGeneratePlan = async (siteId: number) => {
     setLoadingSiteId(siteId);
@@ -47,6 +69,8 @@ export default function SystemsPage() {
         const status = statusChip(site);
         const outstanding = site.resources.filter((r) => r.providedAmount < r.requiredAmount);
         const plan = plans[site.id];
+        const deliveryGroups = groupDeliveries(site.deliveries);
+        const deliveriesOpen = !!expandedDeliveries[site.id];
         return (
           <section className="card wide" key={site.id}>
             <h2>
@@ -73,7 +97,7 @@ export default function SystemsPage() {
                   <div className="card-row" key={r.commodityName}>
                     <span className="label">{r.commodityDisplayName ?? r.commodityName}</span>
                     <span className="value">
-                      {r.providedAmount.toLocaleString()} / {r.requiredAmount.toLocaleString()}
+                      {(r.requiredAmount - r.providedAmount < 0 ? 0 : r.requiredAmount - r.providedAmount).toLocaleString()}
                     </span>
                   </div>
                 ))}
@@ -130,6 +154,41 @@ export default function SystemsPage() {
                     <p className="empty-hint">{plan.message}</p>
                   )
                 ) : null}
+              </>
+            ) : null}
+
+            {site.totalDeliveredTons > 0 ? (
+              <>
+                <div className="card-row muted resource-header">
+                  <span className="label">
+                    Your deliveries — {site.totalDeliveredTons.toLocaleString()} T across{" "}
+                    {deliveryGroups.length.toLocaleString()} drop
+                    {deliveryGroups.length === 1 ? "" : "s"}
+                  </span>
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() =>
+                      setExpandedDeliveries((prev) => ({ ...prev, [site.id]: !prev[site.id] }))
+                    }
+                  >
+                    {deliveriesOpen ? "Hide list" : "Show list"}
+                  </button>
+                </div>
+                {deliveriesOpen
+                  ? deliveryGroups.map((group) => (
+                      <div className="card-row" key={group.timestampUtc}>
+                        <span className="label">
+                          {new Date(group.timestampUtc).toLocaleString()}
+                          <span className="txn-time">
+                            {" "}
+                            · {group.items.map((i) => `${i.amount.toLocaleString()} ${i.name}`).join(", ")}
+                          </span>
+                        </span>
+                        <span className="value">{group.totalTons.toLocaleString()} T</span>
+                      </div>
+                    ))
+                  : null}
               </>
             ) : null}
           </section>

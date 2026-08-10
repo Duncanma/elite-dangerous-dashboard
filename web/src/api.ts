@@ -116,6 +116,9 @@ export type TransactionCategory =
   | "Rebuy"
   | "SearchAndRescue"
   | "CrewWages"
+  | "Outfitting"
+  | "VehicleRestock"
+  | "CrewHire"
   | "Other";
 
 export interface Transaction {
@@ -129,6 +132,11 @@ export interface Transaction {
 export interface BalancePoint {
   timestampUtc: string;
   balance: number;
+}
+
+export interface CategoryTotal {
+  category: TransactionCategory;
+  amount: number;
 }
 
 export interface CreditGoal {
@@ -291,6 +299,13 @@ export interface ColonisationResource {
   payment: number;
 }
 
+export interface ColonisationDelivery {
+  timestampUtc: string;
+  commodityName: string;
+  commodityDisplayName: string | null;
+  amount: number;
+}
+
 export interface ColonisationSite {
   id: number;
   marketId: number;
@@ -302,6 +317,8 @@ export interface ColonisationSite {
   firstSeenUtc: string;
   lastUpdatedUtc: string;
   resources: ColonisationResource[];
+  deliveries: ColonisationDelivery[];
+  totalDeliveredTons: number;
 }
 
 export interface ShippingPlanItem {

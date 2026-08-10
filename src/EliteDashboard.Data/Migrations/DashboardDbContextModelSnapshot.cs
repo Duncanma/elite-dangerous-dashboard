@@ -30,6 +30,47 @@ namespace EliteDashboard.Data.Migrations
                     b.ToTable("AppSettings");
                 });
 
+            modelBuilder.Entity("EliteDashboard.Data.Entities.ColonisationDelivery", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CommodityDisplayName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CommodityName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("JournalFile")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("LineNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("MarketId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("TimestampUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MarketId");
+
+                    b.HasIndex("TimestampUtc");
+
+                    b.HasIndex("JournalFile", "LineNumber", "CommodityName")
+                        .IsUnique();
+
+                    b.ToTable("ColonisationDeliveries");
+                });
+
             modelBuilder.Entity("EliteDashboard.Data.Entities.ColonisationResourceRequirement", b =>
                 {
                     b.Property<long>("Id")

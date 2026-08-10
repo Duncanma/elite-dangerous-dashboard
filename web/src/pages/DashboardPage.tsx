@@ -6,6 +6,7 @@ import { formatCredits, shipLocationText } from "../shipLabels";
 import { rankLabel } from "../rankLabels";
 import { factionIconUrl } from "../factionArt";
 import { MaskIcon } from "../MaskIcon";
+import { SpendBreakdown } from "../EconomicSummary";
 
 function legalStateClass(legalState: string | null): string {
   if (!legalState || legalState === "Clean") return "legal-clean";
@@ -21,15 +22,6 @@ const RANK_ROWS: { key: keyof typeof rankLabel; label: string; faction?: string 
   { key: "federation", label: "Federation", faction: "federation" },
   { key: "empire", label: "Empire", faction: "empire" },
 ];
-
-const SPEND_SEGMENTS = [
-  { key: "spentOnShips", label: "Ships", color: "#aa3bff" },
-  { key: "spentOnOutfitting", label: "Outfitting", color: "#c084fc" },
-  { key: "spentOnRepairs", label: "Repairs", color: "#f97316" },
-  { key: "spentOnFuel", label: "Fuel", color: "#eab308" },
-  { key: "spentOnAmmoConsumables", label: "Ammo/consumables", color: "#38bdf8" },
-  { key: "insuranceClaims", label: "Insurance", color: "#ef4444" },
-] as const;
 
 export default function DashboardPage() {
   const { state } = useDashboardState();
@@ -49,8 +41,6 @@ export default function DashboardPage() {
     federation: "federationProgress",
     empire: "empireProgress",
   } as const;
-
-  const spendTotal = SPEND_SEGMENTS.reduce((sum, seg) => sum + (state.economy[seg.key] ?? 0), 0);
 
   return (
     <div className="grid">
@@ -131,28 +121,7 @@ export default function DashboardPage() {
           <span className="label">Net worth</span>
           <span className="value">{formatCredits(state.economy.currentWealth)}</span>
         </div>
-        {spendTotal > 0 ? (
-          <>
-            <div className="spend-bar">
-              {SPEND_SEGMENTS.filter((seg) => state.economy[seg.key] > 0).map((seg) => (
-                <div
-                  key={seg.key}
-                  className="spend-bar-segment"
-                  style={{ width: `${((state.economy[seg.key] ?? 0) / spendTotal) * 100}%`, background: seg.color }}
-                  title={`${seg.label}: ${formatCredits(state.economy[seg.key])}`}
-                />
-              ))}
-            </div>
-            <div className="spend-legend">
-              {SPEND_SEGMENTS.filter((seg) => state.economy[seg.key] > 0).map((seg) => (
-                <span className="spend-legend-item" key={seg.key}>
-                  <span className="spend-legend-swatch" style={{ background: seg.color }} />
-                  {seg.label}
-                </span>
-              ))}
-            </div>
-          </>
-        ) : null}
+        <SpendBreakdown economy={state.economy} />
       </section>
 
       <section className="card">

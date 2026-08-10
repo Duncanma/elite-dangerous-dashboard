@@ -23,6 +23,7 @@ public sealed class DashboardDbContext : DbContext
     public DbSet<TradeRouteHop> TradeRouteHops => Set<TradeRouteHop>();
     public DbSet<ColonisationSite> ColonisationSites => Set<ColonisationSite>();
     public DbSet<ColonisationResourceRequirement> ColonisationResourceRequirements => Set<ColonisationResourceRequirement>();
+    public DbSet<ColonisationDelivery> ColonisationDeliveries => Set<ColonisationDelivery>();
     public DbSet<ColonisationSystemClaim> ColonisationSystemClaims => Set<ColonisationSystemClaim>();
     public DbSet<PowerplayStanding> PowerplayStandings => Set<PowerplayStanding>();
     public DbSet<PowerplayStandingHistory> PowerplayStandingHistories => Set<PowerplayStandingHistory>();
@@ -116,6 +117,13 @@ public sealed class DashboardDbContext : DbContext
         modelBuilder.Entity<ColonisationResourceRequirement>(entity =>
         {
             entity.HasOne(e => e.Site).WithMany(s => s.Resources).HasForeignKey(e => e.ColonisationSiteId);
+        });
+
+        modelBuilder.Entity<ColonisationDelivery>(entity =>
+        {
+            entity.HasIndex(e => e.MarketId);
+            entity.HasIndex(e => e.TimestampUtc);
+            entity.HasIndex(e => new { e.JournalFile, e.LineNumber, e.CommodityName }).IsUnique();
         });
 
         modelBuilder.Entity<ColonisationSystemClaim>(entity =>

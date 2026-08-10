@@ -662,6 +662,44 @@ a {
   display: inline-block;
 }
 
+.spend-legend-amount {
+  color: var(--text-h);
+  font-weight: 500;
+}
+
+.econ-summary-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  margin-bottom: 4px;
+}
+
+.econ-summary-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.econ-summary-stat .label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.econ-summary-stat .value {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-h);
+  letter-spacing: -0.5px;
+}
+
+@media (max-width: 640px) {
+  .econ-summary-stat .value {
+    font-size: 22px;
+  }
+}
+
 .range-selector {
   display: flex;
   gap: 6px;

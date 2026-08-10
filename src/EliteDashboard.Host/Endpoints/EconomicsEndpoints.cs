@@ -9,6 +9,8 @@ public sealed record CreditGoalRequest(long TargetAmount, DateTimeOffset? Target
 
 public sealed record BalancePoint(DateTimeOffset TimestampUtc, long Balance);
 
+public sealed record CategoryTotal(TransactionCategory Category, long Amount);
+
 public static class EconomicsEndpoints
 {
     public static void MapEconomicsEndpoints(this WebApplication app)
@@ -18,6 +20,7 @@ public static class EconomicsEndpoints
         group.MapGet("/transactions", async (
             IDbContextFactory<DashboardDbContext> factory,
             TransactionCategory? category,
+            DateTimeOffset? since,
             int limit) =>
         {
             await using var db = await factory.CreateDbContextAsync();
@@ -27,8 +30,34 @@ public static class EconomicsEndpoints
                 query = query.Where(t => t.Category == c);
             }
 
+            if (since is { } cutoff)
+            {
+                query = query.Where(t => t.TimestampUtc >= cutoff.UtcDateTime);
+            }
+
             var rows = await query.Take(limit <= 0 ? 200 : Math.Min(limit, 1000)).ToListAsync();
             return Results.Ok(rows);
+        });
+
+        // Aggregates server-side rather than shipping every transaction to the
+        // client just to total them - matters most for "all time" (no `since`),
+        // where the /transactions endpoint's own 1000-row cap would otherwise
+        // silently under-report a long history's real income/expense totals.
+        group.MapGet("/transaction-summary", async (IDbContextFactory<DashboardDbContext> factory, DateTimeOffset? since) =>
+        {
+            await using var db = await factory.CreateDbContextAsync();
+            var query = db.Transactions.AsNoTracking().AsQueryable();
+            if (since is { } cutoff)
+            {
+                query = query.Where(t => t.TimestampUtc >= cutoff.UtcDateTime);
+            }
+
+            var totals = await query
+                .GroupBy(t => t.Category)
+                .Select(g => new CategoryTotal(g.Key, g.Sum(t => t.Amount)))
+                .ToListAsync();
+
+            return Results.Ok(totals);
         });
 
         group.MapGet("/summary", async (IDbContextFactory<DashboardDbContext> factory, StateStore store) =>

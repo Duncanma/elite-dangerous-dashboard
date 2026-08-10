@@ -175,12 +175,76 @@ public sealed record BuyDronesEvent : JournalEvent
     public long TotalCost { get; init; }
 }
 
+public sealed record SellDronesEvent : JournalEvent
+{
+    public int Count { get; init; }
+    public long TotalSale { get; init; }
+}
+
 /// <summary>Fired when choosing a respawn option after Died. Option is "rebuy" or "free"; only "rebuy" carries a real Cost.</summary>
 public sealed record ResurrectEvent : JournalEvent
 {
     public string? Option { get; init; }
     public long Cost { get; init; }
     public bool Bankrupt { get; init; }
+}
+
+/// <summary>Outfitting purchase. May include a simultaneous trade-in of the previous module (SellPrice).</summary>
+public sealed record ModuleBuyEvent : JournalEvent
+{
+    [System.Text.Json.Serialization.JsonPropertyName("BuyItem_Localised")]
+    public string? BuyItemLocalised { get; init; }
+
+    public long BuyPrice { get; init; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("SellItem_Localised")]
+    public string? SellItemLocalised { get; init; }
+
+    public long SellPrice { get; init; }
+}
+
+/// <summary>Buy a module and put it in storage rather than fitting it.</summary>
+public sealed record ModuleBuyAndStoreEvent : JournalEvent
+{
+    [System.Text.Json.Serialization.JsonPropertyName("BuyItem_Localised")]
+    public string? BuyItemLocalised { get; init; }
+
+    public long BuyPrice { get; init; }
+}
+
+public sealed record ModuleSellEvent : JournalEvent
+{
+    [System.Text.Json.Serialization.JsonPropertyName("SellItem_Localised")]
+    public string? SellItemLocalised { get; init; }
+
+    public long SellPrice { get; init; }
+}
+
+public sealed record RestockVehicleEvent : JournalEvent
+{
+    [System.Text.Json.Serialization.JsonPropertyName("Type_Localised")]
+    public string? TypeLocalised { get; init; }
+
+    public string? Type { get; init; }
+    public long Cost { get; init; }
+    public int Count { get; init; }
+}
+
+public sealed record CrewHireEvent : JournalEvent
+{
+    public string? Name { get; init; }
+    public long Cost { get; init; }
+}
+
+public sealed record RefuelPartialEvent : JournalEvent
+{
+    public long Cost { get; init; }
+}
+
+public sealed record BuyExplorationDataEvent : JournalEvent
+{
+    public string? System { get; init; }
+    public long Cost { get; init; }
 }
 
 /// <summary>Fired when handing in salvage (escape pods, black boxes, etc.) at a station's search-and-rescue contact.</summary>
@@ -250,6 +314,7 @@ public sealed record ColonisationSystemClaimEvent : JournalEvent
 public sealed record ColonisationContributionEvent : JournalEvent
 {
     public long MarketID { get; init; }
+    public List<ColonisationContributionEntry> Contributions { get; init; } = [];
 }
 
 /// <summary>Startup-only event, present only if the commander is currently pledged.</summary>

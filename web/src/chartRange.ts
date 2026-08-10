@@ -1,12 +1,23 @@
 import { useState } from "react";
 
-export type ChartRange = "30d" | "90d" | "all";
+export type ChartRange = "7d" | "30d" | "90d" | "all";
 
 export const CHART_RANGES: { value: ChartRange; label: string }[] = [
+  { value: "7d", label: "7 days" },
   { value: "30d", label: "30 days" },
   { value: "90d", label: "90 days" },
   { value: "all", label: "All time" },
 ];
+
+// Single source of truth for how many days each non-"all" range covers -
+// every cutoff calculation (here and in economicsSummary.ts) reads from
+// this, so adding a new range is a one-line change in CHART_RANGES + here,
+// not a hunt for every hardcoded `range === "30d" ? 30 : 90`.
+export const RANGE_DAYS: Record<Exclude<ChartRange, "all">, number> = {
+  "7d": 7,
+  "30d": 30,
+  "90d": 90,
+};
 
 export interface TimeValuePoint {
   time: number;
@@ -27,8 +38,7 @@ export function filterAndGroup<T extends TimeValuePoint>(points: T[], range: Cha
   }
 
   if (range !== "all") {
-    const days = range === "30d" ? 30 : 90;
-    const cutoff = Date.now() - days * DAY_MS;
+    const cutoff = Date.now() - RANGE_DAYS[range] * DAY_MS;
     return points.filter((p) => p.time >= cutoff);
   }
 
@@ -59,13 +69,26 @@ export function rangeShowsFullHistory<T extends TimeValuePoint>(points: T[], ran
     return false;
   }
 
-  const days = range === "30d" ? 30 : 90;
-  const cutoff = Date.now() - days * DAY_MS;
+  const cutoff = Date.now() - RANGE_DAYS[range] * DAY_MS;
   return points[0].time >= cutoff;
 }
 
 function isChartRange(value: string | null): value is ChartRange {
-  return value === "30d" || value === "90d" || value === "all";
+  return CHART_RANGES.some((r) => r.value === value);
+}
+
+/**
+ * ISO cutoff timestamp for a range, or null for "all" (no cutoff) - the
+ * server-side counterpart to the client-side filtering above. Passed as a
+ * `since` query param so the backend doesn't need its own copy of "how many
+ * days is 7d/30d/90d" to stay in sync with.
+ */
+export function rangeSinceUtc(range: ChartRange): string | null {
+  if (range === "all") {
+    return null;
+  }
+
+  return new Date(Date.now() - RANGE_DAYS[range] * DAY_MS).toISOString();
 }
 
 /**

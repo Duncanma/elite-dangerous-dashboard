@@ -96,6 +96,41 @@ public sealed class JournalBackfillServiceTests : IDisposable
         Assert.NotNull(await check.AppSettings.FindAsync(ProcessedThroughKey));
     }
 
+    [Fact]
+    public async Task NumbersWhitespaceOnlyLines_SameAsTailer()
+    {
+        // #6: backfill used IsNullOrWhiteSpace and skipped "   ", shifting
+        // every later LineNumber vs the live tailer. Archive keys must match.
+        using var db = new TestDb();
+        var path = Path.Combine(_dir, "Journal.2026-01-01T000000.01.log");
+        // Explicit newlines so the middle line is exactly three spaces (not
+        // indented by a raw-string margin).
+        File.WriteAllText(path,
+            "{\"timestamp\":\"2026-01-01T00:00:01Z\",\"event\":\"Fileheader\",\"part\":1}\n" +
+            "   \n" +
+            "{\"timestamp\":\"2026-01-01T00:00:02Z\",\"event\":\"Fileheader\",\"part\":2}\n");
+        File.SetLastWriteTimeUtc(path, OldFileTime);
+        // A second "latest" file so backfill owns the one above.
+        WriteJournal("Journal.2026-01-03T000000.01.log", LatestFileTime);
+
+        await RunBackfillAsync(db);
+
+        await using var check = db.CreateContext();
+        var rows = await check.JournalEvents.AsNoTracking()
+            .Where(e => e.JournalFile == path)
+            .OrderBy(e => e.LineNumber)
+            .Select(e => new { e.LineNumber, e.EventType })
+            .ToListAsync();
+
+        // The whitespace-only line isn't valid JSON so it isn't archived, but
+        // it still consumed LineNumber 2 — the second Fileheader must be 3.
+        Assert.Equal(2, rows.Count);
+        Assert.Equal(1, rows[0].LineNumber);
+        Assert.Equal("Fileheader", rows[0].EventType);
+        Assert.Equal(3, rows[1].LineNumber);
+        Assert.Equal("Fileheader", rows[1].EventType);
+    }
+
     private string WriteJournal(string name, DateTime lastWriteUtc)
     {
         var path = Path.Combine(_dir, name);

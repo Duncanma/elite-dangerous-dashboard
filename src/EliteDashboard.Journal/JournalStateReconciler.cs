@@ -304,10 +304,58 @@ public sealed class JournalStateReconciler
                 RecordTransaction(line, e.Timestamp, TransactionCategory.Rearm, -e.TotalCost, "Bought limpet drones");
                 break;
 
+            case SellDronesEvent e when e.TotalSale > 0:
+                RecordTransaction(line, e.Timestamp, TransactionCategory.Rearm, e.TotalSale,
+                    $"Sold {e.Count} limpet drones");
+                break;
+
             // "free" respawns (e.g. covered by insurance in some circumstances)
             // carry no real Cost - only record an actual rebuy expense.
             case ResurrectEvent e when e.Cost > 0:
                 RecordTransaction(line, e.Timestamp, TransactionCategory.Rebuy, -e.Cost, $"Ship rebuy ({e.Option})");
+                break;
+
+            // ModuleBuy can include a simultaneous trade-in of the previous
+            // module in the same journal line (SellPrice). One Transaction per
+            // line is enforced by (JournalFile, LineNumber), so record the net.
+            case ModuleBuyEvent e when e.BuyPrice > 0 || e.SellPrice > 0:
+            {
+                var net = e.SellPrice - e.BuyPrice;
+                var bought = e.BuyItemLocalised ?? "module";
+                var description = e.SellPrice > 0
+                    ? $"Bought {bought} (trade-in {e.SellItemLocalised ?? "module"})"
+                    : $"Bought {bought}";
+                RecordTransaction(line, e.Timestamp, TransactionCategory.Outfitting, net, description);
+                break;
+            }
+
+            case ModuleBuyAndStoreEvent e when e.BuyPrice > 0:
+                RecordTransaction(line, e.Timestamp, TransactionCategory.Outfitting, -e.BuyPrice,
+                    $"Bought {e.BuyItemLocalised ?? "module"} (stored)");
+                break;
+
+            case ModuleSellEvent e when e.SellPrice > 0:
+                RecordTransaction(line, e.Timestamp, TransactionCategory.Outfitting, e.SellPrice,
+                    $"Sold {e.SellItemLocalised ?? "module"}");
+                break;
+
+            case RestockVehicleEvent e when e.Cost > 0:
+                RecordTransaction(line, e.Timestamp, TransactionCategory.VehicleRestock, -e.Cost,
+                    $"Restocked {e.TypeLocalised ?? e.Type ?? "vehicle"}");
+                break;
+
+            case CrewHireEvent e when e.Cost > 0:
+                RecordTransaction(line, e.Timestamp, TransactionCategory.CrewHire, -e.Cost,
+                    e.Name is { } hireName ? $"Hired crew: {hireName}" : "Hired crew");
+                break;
+
+            case RefuelPartialEvent e:
+                RecordTransaction(line, e.Timestamp, TransactionCategory.Refuel, -e.Cost, "Refuelled (partial)");
+                break;
+
+            case BuyExplorationDataEvent e when e.Cost > 0:
+                RecordTransaction(line, e.Timestamp, TransactionCategory.Other, -e.Cost,
+                    e.System is { } system ? $"Bought exploration data: {system}" : "Bought exploration data");
                 break;
 
             case SearchAndRescueEvent e when e.Reward > 0:
@@ -335,7 +383,7 @@ public sealed class JournalStateReconciler
                 break;
 
             case ColonisationContributionEvent e:
-                _ = MarkColonisationSiteContributedAsync(e.MarketID);
+                _ = PersistColonisationContributionAsync(line, e);
                 break;
 
             case ColonisationSystemClaimEvent e when e.StarSystem is not null:
@@ -533,23 +581,54 @@ public sealed class JournalStateReconciler
         });
     }
 
-    private async Task MarkColonisationSiteContributedAsync(long marketId)
+    private async Task PersistColonisationContributionAsync(JournalLine line, ColonisationContributionEvent e)
     {
         await _writeQueue.EnqueueAsync(async (db, ct) =>
         {
-            var site = await db.ColonisationSites.FirstOrDefaultAsync(s => s.MarketId == marketId, ct);
+            var site = await db.ColonisationSites.FirstOrDefaultAsync(s => s.MarketId == e.MarketID, ct);
             if (site is null)
             {
                 // ColonisationContribution can theoretically arrive before
                 // any ConstructionDepot snapshot - create a bare row so the
                 // contribution isn't lost; the next depot snapshot fills in
                 // progress/resources as usual.
-                site = new ColonisationSite { MarketId = marketId, FirstSeenUtc = DateTime.UtcNow };
+                site = new ColonisationSite { MarketId = e.MarketID, FirstSeenUtc = DateTime.UtcNow };
                 db.ColonisationSites.Add(site);
             }
 
             site.HasContributed = true;
             site.LastUpdatedUtc = DateTime.UtcNow;
+
+            foreach (var contribution in e.Contributions ?? [])
+            {
+                if (contribution.Amount <= 0)
+                {
+                    continue;
+                }
+
+                var commodityName = contribution.Name ?? "unknown";
+                var exists = await db.ColonisationDeliveries.AsNoTracking().AnyAsync(
+                    d => d.JournalFile == line.FilePath
+                         && d.LineNumber == line.LineNumber
+                         && d.CommodityName == commodityName,
+                    ct);
+                if (exists)
+                {
+                    continue;
+                }
+
+                db.ColonisationDeliveries.Add(new ColonisationDelivery
+                {
+                    MarketId = e.MarketID,
+                    TimestampUtc = e.Timestamp.UtcDateTime,
+                    CommodityName = commodityName,
+                    CommodityDisplayName = contribution.NameLocalised ?? contribution.Name,
+                    Amount = contribution.Amount,
+                    JournalFile = line.FilePath,
+                    LineNumber = line.LineNumber,
+                });
+            }
+
             await db.SaveChangesAsync(ct);
         });
     }

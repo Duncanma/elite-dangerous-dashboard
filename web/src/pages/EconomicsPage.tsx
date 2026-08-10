@@ -1,9 +1,11 @@
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useEconomics } from "../useEconomics";
+import { useDashboardState } from "../useDashboardState";
 import type { Transaction, TransactionCategory } from "../api";
 import { CHART_RANGES, filterAndGroup, formatHistorySpan, rangeShowsFullHistory, usePersistedChartRange } from "../chartRange";
-import { summarizeTransactions } from "../economicsSummary";
+import { summarizeCategoryTotals } from "../economicsSummary";
 import { formatCredits } from "../shipLabels";
+import { EconomicSummaryRow } from "../EconomicSummary";
 
 const CATEGORY_LABELS: Record<TransactionCategory, string> = {
   TradeBuy: "Trade (buy)",
@@ -20,6 +22,9 @@ const CATEGORY_LABELS: Record<TransactionCategory, string> = {
   Rebuy: "Ship rebuy",
   SearchAndRescue: "Search and rescue",
   CrewWages: "Crew wage",
+  Outfitting: "Outfitting",
+  VehicleRestock: "Vehicle restock",
+  CrewHire: "Crew hire",
   Other: "Other",
 };
 
@@ -30,18 +35,27 @@ function formatAxisCredits(amount: number): string {
 }
 
 export default function EconomicsPage() {
-  const { transactions, summary } = useEconomics();
   const [range, setRange] = usePersistedChartRange("economics-chart-range");
+  const { transactions, summary, categoryTotals } = useEconomics(range);
+  const { state } = useDashboardState();
 
   const fullChartData = summary.map((p) => ({
     time: new Date(p.timestampUtc).getTime(),
     balance: p.balance,
   }));
   const chartData = filterAndGroup(fullChartData, range);
-  const txnSummary = summarizeTransactions(transactions);
+  const txnSummary = summarizeCategoryTotals(categoryTotals);
+  const rangeLabel = CHART_RANGES.find((r) => r.value === range)?.label ?? "this range";
 
   return (
     <div className="grid">
+      {state ? (
+        <section className="card wide">
+          <h2>Economic summary</h2>
+          <EconomicSummaryRow economy={state.economy} />
+        </section>
+      ) : null}
+
       <section className="card wide">
         <h2>Funds over time</h2>
         <div className="range-selector">
@@ -95,10 +109,12 @@ export default function EconomicsPage() {
       <section className="card wide">
         <h2>Transactions</h2>
         {transactions.length === 0 ? (
-          <p className="empty-hint">No transactions recorded yet.</p>
+          <p className="empty-hint">
+            {range === "all" ? "No transactions recorded yet." : `No transactions in the last ${rangeLabel.toLowerCase()} - try a wider range.`}
+          </p>
         ) : (
           <>
-            <p className="empty-hint txn-summary-caption">Summary of the {transactions.length} transactions below</p>
+            <p className="empty-hint txn-summary-caption">Summary for {rangeLabel === "All time" ? "all time" : `the last ${rangeLabel}`}</p>
             <div className="txn-summary">
               <div className="txn-summary-col">
                 <h3>Income</h3>
