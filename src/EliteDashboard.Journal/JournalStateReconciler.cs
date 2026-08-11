@@ -657,7 +657,21 @@ public sealed class JournalStateReconciler
             if (ship.ShipId == e.ShipID)
             {
                 found = true;
-                return ship with { Location = ShipLocationKind.Current, StarSystem = s.CurrentSystem, Station = s.CurrentStation };
+
+                // Name has to be refreshed here, not just carried over from
+                // whatever StoredShips (or the persisted Ships row) last said.
+                // Renaming a ship emits no event this app models, so the new
+                // name only ever arrives on the next Loadout - which updates
+                // DashboardState.ShipName but, without this, left the fleet
+                // entry showing the old name until the next shipyard visit
+                // rebuilt the list.
+                return ship with
+                {
+                    Name = NormalizeName(e.ShipName),
+                    Location = ShipLocationKind.Current,
+                    StarSystem = s.CurrentSystem,
+                    Station = s.CurrentStation,
+                };
             }
 
             // Ship swaps happen while docked, so the ship just swapped out of

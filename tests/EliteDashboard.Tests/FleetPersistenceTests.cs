@@ -124,6 +124,40 @@ public sealed class FleetPersistenceTests
         }
     }
 
+    // Renaming a ship in game emits no event this app models, so a new name
+    // only ever reaches us on the next Loadout. That updated
+    // DashboardState.ShipName (which the dashboard reads) but not the matching
+    // fleet entry (which the fleet page reads), so the two views disagreed
+    // about the current ship's name until the next shipyard visit rebuilt the
+    // fleet from a StoredShips event.
+    [Fact]
+    public void LoadoutEvent_RefreshesTheNameOfTheShipAlreadyInTheFleet()
+    {
+        using var db = new TestDb();
+        var store = new StateStore();
+        var reconciler = CreateReconciler(store, db, new DbWriteQueue());
+
+        reconciler.Handle(new JournalLine("Journal.test.log", 1, """
+            {"timestamp":"2026-01-01T00:00:00Z","event":"StoredShips","StationName":"A","StarSystem":"A",
+             "ShipsHere":[{"ShipID":7,"ShipType":"krait_mkii","Name":"Old Name","Value":1000}],
+             "ShipsRemote":[]}
+            """));
+
+        Assert.Equal("Old Name", store.Current.Fleet.Single(s => s.ShipId == 7).Name);
+
+        reconciler.Handle(new JournalLine("Journal.test.log", 2, """
+            {"timestamp":"2026-01-01T00:01:00Z","event":"Loadout","Ship":"krait_mkii","ShipID":7,"ShipName":"New Name","ShipIdent":"KR-01","CargoCapacity":180,"MaxJumpRange":30.5,"Rebuy":19000,"HullValue":380000,"ModulesValue":120000,"Modules":[]}
+            """));
+
+        var current = store.Current.Fleet.Single(s => s.ShipId == 7);
+        Assert.Equal("New Name", current.Name);
+        Assert.Equal(ShipLocationKind.Current, current.Location);
+
+        // The dashboard's copy of the name was always correct - the point is
+        // that the fleet entry now agrees with it.
+        Assert.Equal("New Name", store.Current.ShipName);
+    }
+
     private static JournalStateReconciler CreateReconciler(StateStore store, TestDb db, DbWriteQueue queue)
         => new(
             store,
